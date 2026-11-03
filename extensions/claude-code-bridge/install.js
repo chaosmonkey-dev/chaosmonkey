@@ -488,7 +488,7 @@ async function install() {
 
   try {
     // 1. Collect API base URL
-    let apiBaseUrl = await prompt(rl, 'Enter your ChaosMonkey API base URL (e.g. https://patra.chaosmonkey.dev): ');
+    let apiBaseUrl = await prompt(rl, 'Enter your ChaosMonkey API base URL (e.g. https://chaosmonkey.example.com): ');
     apiBaseUrl = (apiBaseUrl || '').trim().replace(/\/+$/, '');
     if (!apiBaseUrl) {
       log('ERROR: API base URL is required.');

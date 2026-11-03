@@ -529,7 +529,7 @@ async function install() {
     } else {
       let apiBaseUrl = process.env.CM_API_BASE_URL
         ? process.env.CM_API_BASE_URL.trim()
-        : await prompt(rl, 'Enter your ChaosMonkey API base URL (e.g. https://gloo.chaosmonkey.dev): ');
+        : await prompt(rl, 'Enter your ChaosMonkey API base URL (e.g. https://chaosmonkey.example.com): ');
       apiBaseUrl = (apiBaseUrl || '').trim().replace(/\/+$/, '');
       if (!apiBaseUrl) {
         log('ERROR: API base URL is required.');

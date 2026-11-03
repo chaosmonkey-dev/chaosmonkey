@@ -21,7 +21,7 @@ for this release. Paste it in place of `<SHA256>`:
 
 ```bash
 cd "$(mktemp -d)" \
-  && curl -fsSLJO "https://gloo.chaosmonkey.dev/api/cursor-agent-bridge/download/latest" \
+  && curl -fsSLJO "https://chaosmonkey.example.com/api/cursor-agent-bridge/download/latest" \
   && echo "<SHA256>  chaosmonkey-cursor-agent-bridge-0.4.2-cursor-bridge.tgz" | shasum -a 256 -c - \
   && tar -xzf chaosmonkey-cursor-agent-bridge-0.4.2-cursor-bridge.tgz \
   && node package/install.js
@@ -42,7 +42,7 @@ your ChaosMonkey admin). A checksum fetched from the same server as the
 package would not be independent proof.
 
 The installer asks for your ChaosMonkey API base URL
-(`https://gloo.chaosmonkey.dev`) and your connect code, then finishes the
+(`https://chaosmonkey.example.com`) and your connect code, then finishes the
 setup automatically. Existing `~/.cursor/hooks.json` entries are preserved;
 no IDE extension changes are required.
 
@@ -54,7 +54,7 @@ Non-interactive enrollment is supported via environment variables (useful
 for scripted installs; keeps the connect code out of shell history):
 
 ```bash
-CM_API_BASE_URL="https://gloo.chaosmonkey.dev" CM_CONNECT_CODE="YOUR-CODE" node package/install.js
+CM_API_BASE_URL="https://chaosmonkey.example.com" CM_CONNECT_CODE="YOUR-CODE" node package/install.js
 ```
 
 ## Install (developer — from source)

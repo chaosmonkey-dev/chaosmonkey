@@ -597,7 +597,7 @@ const RACE_DEBUG = (import.meta.env.VITE_RACE_DEBUG ?? 'true') === 'true'
 let requestIdCounter = 0
 
 // Local-only demo: hide the Pilot setup banner (API base URL + extension
-// download) to recover vertical recording space. Customer/Patra/Ed envs do
+// download) to recover vertical recording space. Hosted/customer envs do
 // not set this flag, so their banner behavior is unchanged.
 // CR-X R2: In dev mode, default to hidden unless explicitly overridden.
 const hidePilotSetup = import.meta.env.DEV
@@ -1545,7 +1545,7 @@ const insightsToPass = computed(() => {
   const isLivePilotRuntime = isLivePilotModeCanonical()
 
   if (isLivePilotRuntime) {
-    // Check if Ryan has any real data
+    // Check if the live org has any real data
     const canonicalPopulationCount = githubStore.rawResponse?.canonical_population_count || 0
     const sessionsCount = sessionsForUI.value?.length || 0
     const totalPRs = githubStore.rawResponse?.total_pull_requests || 0
@@ -1553,7 +1553,7 @@ const insightsToPass = computed(() => {
     const githubUser = githubStore.rawResponse?.github_user
     const githubConnected = githubStore.rawResponse?.github_connected
 
-    const emptyRyanPilot =
+    const emptyLivePilot =
       canonicalPopulationCount === 0 &&
       sessionsCount === 0 &&
       totalPRs === 0 &&
@@ -1561,8 +1561,8 @@ const insightsToPass = computed(() => {
       githubUser === null &&
       githubConnected === false
 
-    if (emptyRyanPilot) {
-      dashLog('[LIVE_PILOT_HARD_BLOCK] Ryan has no data - blocking all PI', {
+    if (emptyLivePilot) {
+      dashLog('[LIVE_PILOT_HARD_BLOCK] Org has no data - blocking all PI', {
         canonicalPopulationCount,
         sessionsCount,
         totalPRs,
@@ -1639,7 +1639,7 @@ const insightsToPass = computed(() => {
   }
   
   // CR-X Wave 3 Slice A: Computed purity — do NOT mutate reactive state
-  // (lastGoodInsights.value) inside this computed getter. The Ryan EC2
+  // (lastGoodInsights.value) inside this computed getter. A past production
   // browser hang was caused by exactly this pattern (see AGENTS.md
   // "Vue Computed Side Effects" lesson). lastGoodInsights caching is
   // owned by refreshPI() async (lines ~3392, 3400) and the empty-pilot

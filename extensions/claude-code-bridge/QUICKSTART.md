@@ -45,7 +45,7 @@ node install.js
 The installer will prompt for:
 
 1. **API base URL** — your ChaosMonkey backend URL  
-   (e.g. `https://prioritydispatch.chaosmonkey.dev`)
+   (e.g. `https://chaosmonkey.example.com`)
 2. **Connect code** — the code from step 2
 
 The installer:

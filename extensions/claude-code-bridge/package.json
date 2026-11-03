@@ -1,7 +1,7 @@
 {
   "name": "chaosmonkey-cc-bridge",
   "version": "0.4.2-cc-bridge",
-  "description": "ChaosMonkey Claude Code Terminal Bridge — sends pseudonymous coding telemetry from Claude Code to ChaosMonkey",
+  "description": "ChaosMonkey Claude Code Terminal Bridge \u2014 sends pseudonymous coding telemetry from Claude Code to ChaosMonkey",
   "main": "bridge.js",
   "bin": {
     "chaosmonkey-cc-bridge-install": "./install.js",
@@ -21,6 +21,6 @@
   "engines": {
     "node": ">=18.0.0"
   },
-  "license": "MIT",
+  "license": "Apache-2.0",
   "private": true
 }

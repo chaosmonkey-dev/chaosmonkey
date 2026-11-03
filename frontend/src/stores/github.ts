@@ -785,7 +785,7 @@ export const useGitHubStore = defineStore('github', () => {
           {
             id: 1,
             name: 'ChaosMonkey.dev',
-            full_name: 'mattmcclintock/ChaosMonkey.dev',
+            full_name: 'example-org/chaosmonkey-dev',
             description: 'Chaos Monkey Development',
             private: false,
             fork: false,
@@ -796,7 +796,7 @@ export const useGitHubStore = defineStore('github', () => {
           {
             id: 2,
             name: 'fake-codesight-repo',
-            full_name: 'mattmcclintock/fake-codesight-repo',
+            full_name: 'example-org/sample-repo',
             description: 'Fake CodeSight Repository',
             private: false,
             fork: false,
@@ -807,7 +807,7 @@ export const useGitHubStore = defineStore('github', () => {
           {
             id: 3,
             name: 'jediraptor',
-            full_name: 'mattmcclintock/jediraptor',
+            full_name: 'example-org/jediraptor',
             description: 'Jedi Raptor Project',
             private: false,
             fork: false,

@@ -87,5 +87,6 @@
     "@typescript-eslint/parser": "^6.x",
     "eslint": "^8.x",
     "typescript": "^5.9.3"
-  }
+  },
+  "license": "Apache-2.0"
 }

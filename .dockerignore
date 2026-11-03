@@ -1,0 +1,39 @@
+.git
+.github
+docs
+tools
+dev
+releases
+audit
+
+# Dependencies and build output (rebuilt inside the image)
+node_modules
+vendor
+frontend/dist
+frontend/node_modules
+
+# Runtime data and secrets
+.env
+.env.*
+!backend/.env.example
+!frontend/.env.example
+*.sqlite
+*.sqlite-*
+*.log
+cookies.txt
+.DS_Store
+
+# Laravel runtime
+backend/storage/app/*
+backend/storage/framework/cache/data/*
+backend/storage/framework/sessions/*
+backend/storage/framework/views/*
+backend/storage/framework/testing/*
+backend/storage/logs/*
+backend/bootstrap/cache/*
+!**/.gitkeep
+
+# Docker files themselves
+Dockerfile
+docker-compose.yml
+.dockerignore

@@ -1171,8 +1171,8 @@ const filteredRepoEconomics = computed(() => {
 
   // Scoped rows: filter authoritative sessions to the selected repo.
   // CR-X Gate A fix: selectedRepo.value is a normalized canonical ID
-  // (e.g. "mattmcclintock/angrymonkey") but session rows have raw URLs
-  // (e.g. "https://github.com/mattmcclintock/angrymonkey").
+  // (e.g. "org/repo") but session rows have raw URLs
+  // (e.g. "https://github.com/org/repo").
   // Normalize the session row's repo URL before comparing.
   const scopedRows = props.authoritativeSessions.filter((s: any) => {
     const rawRepo = s.git_repo_url || s.repository || s.repo
@@ -2218,7 +2218,7 @@ const fetchRepos = async () => {
     // Merge both sources, normalize, and deduplicate
     const allRepos = [...telemetryRepos, ...githubRepos]
     // Exclude identities proven operator-only (all sessions credited to
-    // known operator enrollments, e.g. mattmcclintock/angrymonkey on org 2).
+    // configured operator enrollments).
     // Display-layer only — raw telemetry is preserved. Ambiguous or
     // unresolved identities are retained.
     availableRepos.value = normalizeRepoList(allRepos)

@@ -1,7 +1,7 @@
 {
   "name": "chaosmonkey-cursor-agent-bridge",
   "version": "0.4.2-cursor-bridge",
-  "description": "ChaosMonkey Cursor Agent Bridge — sends pseudonymous agent-session telemetry from Cursor agent hooks to ChaosMonkey",
+  "description": "ChaosMonkey Cursor Agent Bridge \u2014 sends pseudonymous agent-session telemetry from Cursor agent hooks to ChaosMonkey",
   "main": "bridge.js",
   "bin": {
     "chaosmonkey-cursor-bridge-install": "./install.js",
@@ -22,6 +22,6 @@
   "engines": {
     "node": ">=18.0.0"
   },
-  "license": "MIT",
+  "license": "Apache-2.0",
   "private": true
 }

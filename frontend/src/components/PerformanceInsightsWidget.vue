@@ -353,7 +353,7 @@ const showZeroTelemetryState = computed(() => {
 });
 
 // CR-X FINAL: Diagnostic-only state — 0 findings, but diagnostics > 0.
-// This is the sparse-pilot state (e.g. Gloo with 5 sessions, 8 diagnostics, 0 findings).
+// This is the sparse-telemetry state (few sessions, diagnostics but no findings).
 // The UI should say "we are collecting evidence, here is what is missing"
 // NOT "no insights match current filters" or "loading".
 const showDiagnosticOnlyState = computed(() => {
@@ -4357,7 +4357,7 @@ const chipInsightsByStage = computed(() => {
       :actionUrl="props.hasAnyData === false ? pilotApiBase + '/api/extension/download/latest' : undefined"
     />
 
-    <!-- CR-X FINAL: Diagnostic-only state (sparse pilot, e.g. Gloo) -->
+    <!-- Diagnostic-only state (sparse telemetry) -->
     <!-- 0 findings, diagnostics > 0 — "we are collecting evidence, here is what is missing" -->
     <div v-else-if="showDiagnosticOnlyState" class="pi-diagnostic-only-state">
       <div class="pi-diagnostic-only-icon">

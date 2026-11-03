@@ -3,7 +3,7 @@
  * - generateRepoConditionedBehavior (W × R × B)
  * - generateCrossSurfaceBehavior (W × S)
  *
- * Regression context (Nov 1 fleet audit, Patra): a repo comparison rendered
+ * Regression context (fleet audit): a repo comparison rendered
  * a 1,389.4× AI-burst multiplier when the comparison repo's observed value
  * was literally 0.0. The multiplier came from dividing by a 0.001 clamp —
  * false precision, not measurement. A zero or near-zero baseline cannot
@@ -71,7 +71,7 @@ function crossSurfaceAiBurst(insights: CanonicalInsight[]) {
 
 console.log('Zero-baseline ratio guards — repo-conditioned + cross-surface');
 
-// 1. TRUE ZERO baseline (the Patra case): repo A avg 1.4, repo B avg 0.0.
+// 1. TRUE ZERO baseline: repo A avg 1.4, repo B avg 0.0.
 //    The finding may exist (absolute comparison is meaningful) but must not
 //    display a fabricated multiplier.
 {
