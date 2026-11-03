@@ -1,0 +1,250 @@
+/* Shared CM Tile Styles - Based on AI Usage Signals */
+
+/* Signal Tiles */
+.signal-tile {
+  background: linear-gradient(180deg, var(--cm-white), var(--cm-gray-50));
+  border: var(--cm-border-light);
+  border-radius: var(--cm-radius-md);
+  padding: var(--cm-space-md);
+  height: 100%;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.signal-tile:hover {
+  box-shadow: var(--cm-shadow-lg);
+  transform: translateY(-1px);
+}
+
+.tile-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--cm-space-sm);
+}
+
+.stage-section {
+  margin-bottom: var(--cm-space-xl);
+}
+
+.performance-insights-chips .stage-section {
+  display: grid !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  gap: var(--cm-space-md) !important;
+  flex-direction: unset !important;
+}
+
+.performance-insights-chips .chip-tile {
+  width: auto !important;
+  max-width: none !important;
+  grid-column: auto !important;
+  /* Reduce padding for tighter layout */
+  padding: var(--cm-space-sm) var(--cm-space-md) !important;
+  /* Reduce min-height if present */
+  min-height: auto !important;
+  /* Tighter line-height on titles and values */
+  line-height: 1.2 !important;
+}
+
+/* Make primary chip visually dominant */
+.performance-insights-chips .chip-tile.is-primary {
+  border: 2px solid var(--cm-blue-600) !important;
+  box-shadow: var(--cm-shadow-lg) !important;
+  transform: scale(1.02) !important;
+}
+
+.tile-icon {
+  width: 24px;
+  height: 24px;
+  border-radius: var(--cm-radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.875rem;
+  color: white;
+}
+
+/* Color themes */
+.tile-icon.intensity { background: var(--cm-teal-500); }    /* teal - Plan & Code */
+.tile-icon.efficiency { background: var(--cm-green-500); }  /* green - Review & Merge */
+.tile-icon.productivity { background: var(--cm-purple-500); } /* purple - Deploy & Operate */
+.tile-icon.velocity { background: var(--cm-orange-500); }   /* orange - fallback */
+
+.tile-status {
+  font-size: var(--cm-font-xs);
+  padding: var(--cm-space-xs) var(--cm-space-sm);
+  border-radius: var(--cm-radius-sm);
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.tile-status.live { background: var(--cm-green-100); color: var(--cm-green-800); }
+.tile-status.partial { background: var(--cm-yellow-100); color: var(--cm-yellow-800); }
+.tile-status.incomplete { background: var(--cm-red-100); color: var(--cm-red-800); }
+
+/* Typography */
+.tile-value {
+  font-size: var(--cm-font-lg);
+  font-weight: 700;
+  color: var(--cm-gray-900);
+  margin-bottom: var(--cm-space-xs);
+  text-align: center;
+}
+
+.tile-delta {
+  font-size: var(--cm-font-xs);
+  font-weight: 500;
+  color: var(--cm-gray-500);
+  margin-bottom: var(--cm-space-xs);
+  text-align: center;
+}
+
+.tile-label {
+  font-size: var(--cm-font-sm);
+  font-weight: 500;
+  color: var(--cm-gray-700);
+  margin-bottom: var(--cm-space-xs);
+  text-align: center;
+}
+
+.tile-time {
+  font-size: var(--cm-font-xs);
+  color: var(--cm-gray-500);
+  text-align: center;
+}
+
+/* Grid layout for tiles */
+.signal-tiles-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--cm-space-sm);
+}
+
+/* 🔥 PHASE 3.4.5 — SHARED CM GRID UTILITY */
+.cm-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--cm-space-md);
+}
+
+@media (max-width: 1200px) {
+  .cm-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .cm-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* IDE comparison grid - force 3-column layout */
+.ide-comparison-container {
+  display: grid !important;
+  grid-template-columns: repeat(3, 1fr) !important;
+  gap: 16px !important;
+  margin-bottom: 24px;
+  /* Remove any vertical stacking behavior */
+  flex-direction: unset !important;
+  flex-wrap: unset !important;
+  .cm-grid-ide-comparison {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Grid at stage-section level - chips are direct children */
+.performance-insights-chips .stage-section {
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(280px, 1fr)) !important;
+  gap: 16px !important;
+  align-items: stretch;
+  width: 100% !important;
+  /* Override Bootstrap flexbox */
+  flex-direction: unset !important;
+  flex-wrap: unset !important;
+  /* Override any other layout */
+  flex: none !important;
+  max-width: none !important;
+  /* Force grid behavior */
+  justify-content: unset !important;
+  align-content: unset !important;
+}
+
+/* Responsive grid for Performance Insights */
+@media (max-width: 1200px) {
+  .performance-insights-chips .stage-section {
+    grid-template-columns: repeat(2, minmax(280px, 1fr)) !important;
+  }
+}
+
+@media (max-width: 768px) {
+  .performance-insights-chips .stage-section {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* Prevent chip full-width behavior */
+.pi-chips-grid {
+  /* Grid moved to stage-section level - no layout rules here */
+  align-items: stretch;
+  flex: none !important;
+}
+
+.pi-chips-grid > * {
+  width: auto !important;
+  max-width: none !important;
+  min-width: 0 !important;
+  display: block;
+  grid-column: auto !important;
+}
+
+.chip-tile {
+  width: auto !important;
+  max-width: none !important;
+  flex: initial !important;
+  /* Prevent chip from taking full grid cell */
+  min-width: 0 !important;
+  /* Override any Bootstrap width classes */
+  flex-basis: unset !important;
+  flex-grow: 0 !important;
+  flex-shrink: 1 !important;
+}
+
+.pi-chips-grid .chip-tile.expanded {
+  grid-column: 1 / -1 !important;
+}
+
+/* PI Chip Container - no dark styling */
+.insight-chip-container {
+  position: relative;
+}
+
+/* Expanded chip takes full width */
+.insight-chip-expanded {
+  grid-column: 1 / -1;
+}
+
+/* Expanded content breaks out of grid constraints */
+.insight-chip-expanded-content {
+  grid-column: 1 / -1;
+  width: 100%;
+  margin-top: 0.5rem;
+  padding: 1rem;
+  background: white;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+@media (max-width: 768px) {
+  .signal-tiles-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 480px) {
+  .signal-tiles-grid {
+    grid-template-columns: 1fr;
+  }
+}

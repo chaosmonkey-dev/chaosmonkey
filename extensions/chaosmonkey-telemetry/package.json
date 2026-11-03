@@ -1,0 +1,91 @@
+{
+  "name": "chaosmonkey-telemetry",
+  "displayName": "ChaosMonkey Telemetry",
+  "description": "Captures IDE activity and streams telemetry to ChaosMonkey backend",
+  "version": "0.4.1",
+  "publisher": "chaosmonkey",
+  "icon": "media/CM-cropped.png",
+  "engines": {
+    "vscode": "^1.85.0",
+    "cursor": "^1.0.0",
+    "windsurf": "^1.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/chaosmonkey/telemetry-extension"
+  },
+  "extensionDependencies": [
+    "vscode.git"
+  ],
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "chaosmonkeyTelemetry.sendTestEvent",
+        "title": "ChaosMonkey: Send Test Event"
+      },
+      {
+        "command": "chaosmonkeyTelemetry.flushNow",
+        "title": "ChaosMonkey: Flush Now"
+      },
+      {
+        "command": "chaosmonkeyTelemetry.recordAiAccept",
+        "title": "ChaosMonkey: Record AI Suggestion Accepted"
+      },
+      {
+        "command": "chaosmonkeyTelemetry.recordCommit",
+        "title": "ChaosMonkey: Record Commit"
+      },
+      {
+        "command": "chaosmonkeyTelemetry.testGitCapture",
+        "title": "ChaosMonkey: [DEBUG] Test Git Capture"
+      },
+      {
+        "command": "chaosmonkeyTelemetry.connect",
+        "title": "ChaosMonkey: Connect"
+      }
+    ],
+    "configuration": {
+      "title": "ChaosMonkey Telemetry",
+      "properties": {
+        "chaosmonkey.apiBaseUrl": {
+          "type": "string",
+          "default": "",
+          "description": "ChaosMonkey API base URL (set during Connect)"
+        },
+        "chaosmonkey.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable/disable telemetry collection"
+        },
+        "chaosmonkey.flushInterval": {
+          "type": "number",
+          "default": 30,
+          "description": "Interval (in seconds) to flush telemetry queue"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile",
+    "test": "NODE_PATH=./out/__mocks__ node --test out/*.test.js",
+    "lint": "eslint src --ext ts"
+  },
+  "devDependencies": {
+    "@types/node": "^20.x",
+    "@types/vscode": "^1.85.0",
+    "@typescript-eslint/eslint-plugin": "^6.x",
+    "@typescript-eslint/parser": "^6.x",
+    "eslint": "^8.x",
+    "typescript": "^5.9.3"
+  }
+}

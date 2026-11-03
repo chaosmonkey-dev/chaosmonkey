@@ -1,0 +1,65 @@
+// 🎯 DEMO NARRATIVE: Ensure every stage shows at least 1 meaningful metric
+  if (stageInsights.length === 0) {
+    const stageFallbacks: Record<string, PerformanceInsight> = {
+      'plan-code': {
+        id: 'fallback-plan-code',
+        title: 'Plan & Code Activity',
+        description: 'Development planning and coding metrics',
+        severity: 'info' as const,
+        cicdStage: 'plan-code' as const,
+        displayValue: 'Active',
+        unit: '',
+        displayDelta: '',
+        confidenceLevel: 'LOW' as const,
+        insightClass: 'org_deterministic' as const,
+        tags: ['productivity', 'planning'],
+        source: 'simulated' as const,
+        expandedData: {
+          evidence: [{ label: 'Status', value: 'Monitoring activity' }],
+          recommendations: [{ text: 'Enable telemetry for detailed insights' }]
+        }
+      },
+      'review-merge': {
+        id: 'fallback-review-merge',
+        title: 'Review & Merge Process',
+        description: 'Code review and merge workflow metrics',
+        severity: 'info' as const,
+        cicdStage: 'review-merge' as const,
+        displayValue: 'Stable',
+        unit: '',
+        displayDelta: '',
+        confidenceLevel: 'LOW' as const,
+        insightClass: 'org_deterministic' as const,
+        tags: ['productivity', 'review'],
+        source: 'simulated' as const,
+        expandedData: {
+          evidence: [{ label: 'Status', value: 'Monitoring process' }],
+          recommendations: [{ text: 'Connect GitHub for review metrics' }]
+        }
+      },
+      'deploy-operate': {
+        id: 'fallback-deploy-operate',
+        title: 'Deploy & Operate Status',
+        description: 'Deployment and operational performance',
+        severity: 'info' as const,
+        cicdStage: 'deploy-operate' as const,
+        displayValue: 'Ready',
+        unit: '',
+        displayDelta: '',
+        confidenceLevel: 'LOW' as const,
+        insightClass: 'org_deterministic' as const,
+        tags: ['productivity', 'deployment'],
+        source: 'simulated' as const,
+        expandedData: {
+          evidence: [{ label: 'Status', value: 'Monitoring deployments' }],
+          recommendations: [{ text: 'Configure CI/CD for deployment metrics' }]
+        }
+      }
+    }
+    
+    if (stageFallbacks[stageId]) {
+      stageInsights.push(stageFallbacks[stageId])
+    }
+  }
+  
+  return stageInsights

@@ -1,0 +1,6 @@
+[
+  { "name": "Lead Time for Changes", "value": "2 days", "missingState": null, "source": "GitHub PR telemetry", "confidence": "High", "note": "Estimated from PR, commit, and merge timestamps." },
+  { "name": "Deployment Frequency", "value": "3/week", "missingState": null, "source": "CI / release tags", "confidence": "Medium", "note": "Counts instrumented releases or deploy events in CI." },
+  { "name": "Change Failure Rate", "value": "12%", "missingState": null, "source": "GitHub-inferred", "confidence": "Medium", "note": "Estimated from merge/revert and issue linkage; requires incident linkage for higher fidelity." },
+  { "name": "Mean Time to Recovery (MTTR)", "value": null, "missingState": "insufficient_history", "source": "GitHub/issue timestamps", "confidence": "Low", "note": "Estimated from incident and rollback timestamps where available." }
+]

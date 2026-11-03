@@ -1,0 +1,27 @@
+{
+  "name": "chaosmonkey-cursor-agent-bridge",
+  "version": "0.4.2-cursor-bridge",
+  "description": "ChaosMonkey Cursor Agent Bridge — sends pseudonymous agent-session telemetry from Cursor agent hooks to ChaosMonkey",
+  "main": "bridge.js",
+  "bin": {
+    "chaosmonkey-cursor-bridge-install": "./install.js",
+    "chaosmonkey-cursor-bridge-uninstall": "./uninstall.js"
+  },
+  "files": [
+    "bridge.js",
+    "install.js",
+    "uninstall.js",
+    "README.md"
+  ],
+  "scripts": {
+    "check": "node --check bridge.js && node --check install.js && node --check uninstall.js",
+    "test": "node test/cursor-bridge.test.js",
+    "package": "node --check bridge.js && node --check install.js && node --check uninstall.js && npm pack",
+    "sha256": "shasum -a 256 bridge.js install.js uninstall.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "license": "MIT",
+  "private": true
+}

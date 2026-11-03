@@ -1,0 +1,228 @@
+:root {
+  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+
+  color-scheme: light dark;
+  color: rgba(255, 255, 255, 0.87);
+  background-color: #000000;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+a {
+  font-weight: 500;
+  color: #646cff;
+  text-decoration: inherit;
+}
+a:hover {
+  color: #535bf2;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+h1 {
+  font-size: 3.2em;
+  line-height: 1.1;
+}
+
+button {
+  border-radius: 8px;
+  border: 1px solid transparent;
+  padding: 0.6em 1.2em;
+  font-size: 1em;
+  font-weight: 500;
+  font-family: inherit;
+  background-color: #1a1a1a;
+  cursor: pointer;
+  transition: border-color 0.25s;
+}
+button:hover {
+  border-color: #646cff;
+}
+button:focus,
+button:focus-visible {
+  outline: 4px auto -webkit-focus-ring-color;
+}
+
+.card {
+  padding: 2em;
+}
+
+#app {
+  width: 100%;
+  min-height: 100vh;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    color: #213547;
+    background-color: #ffffff;
+  }
+  a:hover {
+    color: #747bff;
+  }
+  button {
+    background-color: #f9f9f9;
+  }
+}
+
+/* Mobile responsive typography */
+@media (max-width: 576px) {
+  h1 {
+    font-size: 1.75rem;
+  }
+  
+  h2 {
+    font-size: 1.5rem;
+  }
+  
+  h3 {
+    font-size: 1.25rem;
+  }
+  
+  body {
+    font-size: 0.95rem;
+  }
+  
+  /* Mobile test badge - remove after verification */
+  body::before {
+    content: "MOBILE v2";
+    position: fixed;
+    top: 0;
+    left: 0;
+    background: #ff6b6b;
+    color: white;
+    padding: 4px 8px;
+    font-size: 10px;
+    font-weight: bold;
+    z-index: 9999;
+    border-radius: 0 0 4px 0;
+  }
+}
+
+/* ========================================
+   ENTERPRISE DESIGN TOKENS
+   Safe convergence tokens for dashboard
+   ======================================= */
+
+/* Border Radius Tokens */
+:root {
+  --cm-radius-xs: 4px;
+  --cm-radius-sm: 6px;
+  --cm-radius-md: 8px;
+  --cm-radius-lg: 12px;
+  --cm-radius-xl: 16px;
+}
+
+/* Shadow Tokens - Enterprise Subtle */
+:root {
+  --cm-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --cm-shadow-md: 0 2px 4px rgba(0, 0, 0, 0.08);
+  --cm-shadow-lg: 0 4px 6px rgba(0, 0, 0, 0.1);
+  --cm-shadow-hover: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Spacing Tokens - Enterprise Tight */
+:root {
+  --cm-space-xs: 0.25rem;   /* 4px */
+  --cm-space-sm: 0.5rem;    /* 8px */
+  --cm-space-md: 0.75rem;   /* 12px */
+  --cm-space-lg: 1rem;      /* 16px */
+  --cm-space-xl: 1.5rem;    /* 24px */
+  --cm-space-2xl: 2rem;    /* 32px */
+  --cm-space-3xl: 3rem;    /* 48px */
+}
+
+/* Typography Tokens - Enterprise Hierarchy */
+:root {
+  --cm-font-xs: 0.7rem;     /* 11px */
+  --cm-font-sm: 0.8rem;     /* 13px */
+  --cm-font-base: 0.875rem; /* 14px */
+  --cm-font-md: 1rem;       /* 16px */
+  --cm-font-lg: 1.125rem;   /* 18px */
+  --cm-font-xl: 1.25rem;    /* 20px */
+  --cm-font-2xl: 1.5rem;   /* 24px */
+  --cm-font-3xl: 1.875rem; /* 30px */
+}
+
+/* Color Tokens - Enterprise Palette */
+:root {
+  --cm-gray-50: #f8fafc;
+  --cm-gray-100: #f1f5f9;
+  --cm-gray-200: #e2e8f0;
+  --cm-gray-300: #cbd5e1;
+  --cm-gray-400: #94a3b8;
+  --cm-gray-500: #64748b;
+  --cm-gray-600: #475569;
+  --cm-gray-700: #334155;
+  --cm-gray-800: #1e293b;
+  --cm-gray-900: #0f172a;
+  
+  --cm-blue-50: #eff6ff;
+  --cm-blue-100: #dbeafe;
+  --cm-blue-500: #3b82f6;
+  --cm-blue-600: #2563eb;
+  --cm-blue-700: #1d4ed8;
+  
+  --cm-green-50: #f0fdf4;
+  --cm-green-100: #dcfce7;
+  --cm-green-500: #10b981;
+  --cm-green-600: #059669;
+  --cm-green-700: #047857;
+  
+  --cm-red-50: #fef2f2;
+  --cm-red-100: #fee2e2;
+  --cm-red-500: #ef4444;
+  --cm-red-600: #dc2626;
+  --cm-red-700: #b91c1c;
+  
+  --cm-purple-50: #f5f3ff;
+  --cm-purple-100: #ede9fe;
+  --cm-purple-500: #8b5cf6;
+  --cm-purple-600: #7c3aed;
+  --cm-purple-700: #6d28d9;
+}
+
+/* Border Tokens */
+:root {
+  --cm-border-light: 1px solid var(--cm-gray-200);
+  --cm-border-medium: 1px solid var(--cm-gray-300);
+  --cm-border-strong: 1px solid var(--cm-gray-400);
+}
+
+/* Enterprise Utility Classes */
+.cm-card {
+  border-radius: var(--cm-radius-md);
+  box-shadow: var(--cm-shadow-sm);
+  border: var(--cm-border-light);
+}
+
+.cm-card-hover {
+  border-radius: var(--cm-radius-md);
+  box-shadow: var(--cm-shadow-hover);
+  border: var(--cm-border-medium);
+}
+
+.cm-text-xs { font-size: var(--cm-font-xs); }
+.cm-text-sm { font-size: var(--cm-font-sm); }
+.cm-text-base { font-size: var(--cm-font-base); }
+.cm-text-md { font-size: var(--cm-font-md); }
+.cm-text-lg { font-size: var(--cm-font-lg); }
+.cm-text-xl { font-size: var(--cm-font-xl); }
+
+.cm-text-muted { color: var(--cm-gray-500); }
+.cm-text-subtle { color: var(--cm-gray-400); }
+
+.cm-space-xs { margin: var(--cm-space-xs); }
+.cm-space-sm { margin: var(--cm-space-sm); }
+.cm-space-md { margin: var(--cm-space-md); }
+.cm-space-lg { margin: var(--cm-space-lg); }
+.cm-space-xl { margin: var(--cm-space-xl); }

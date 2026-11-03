@@ -1,0 +1,26 @@
+{
+  "name": "chaosmonkey-cc-bridge",
+  "version": "0.4.2-cc-bridge",
+  "description": "ChaosMonkey Claude Code Terminal Bridge — sends pseudonymous coding telemetry from Claude Code to ChaosMonkey",
+  "main": "bridge.js",
+  "bin": {
+    "chaosmonkey-cc-bridge-install": "./install.js",
+    "chaosmonkey-cc-bridge-uninstall": "./uninstall.js"
+  },
+  "files": [
+    "bridge.js",
+    "install.js",
+    "uninstall.js",
+    "README.md"
+  ],
+  "scripts": {
+    "check": "node --check bridge.js && node --check install.js && node --check uninstall.js",
+    "package": "node --check bridge.js && node --check install.js && node --check uninstall.js && npm pack",
+    "sha256": "shasum -a 256 bridge.js install.js uninstall.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "license": "MIT",
+  "private": true
+}

@@ -1,0 +1,43 @@
+{
+  "id": "session-12345",
+  "event_type": "session",
+  "timestamp": "2026-01-15T14:30:00Z",
+  "duration_ms": 3600000,
+  "metadata": {
+    "session_id": "session-12345",
+    "git_repo_url": "https://github.com/example/repo",
+    "segment_type": "session",
+    "tool": "windsurf",
+    "ai_intensity_band": "high",
+    "session_commits": 4,
+    "session_has_commit_outcome": true,
+    "time_to_first_commit_ms": 420000,
+    "session_prs_created": 3,
+    "session_prs_merged": 2,
+    "session_pr_reopen_count": 0,
+    "session_deployment_successes": 5,
+    "session_active_coding_duration_minutes": 45,
+    "session_duration_minutes": 60,
+    "session_ai_burst_count": 12,
+    "chars_added_total": 2500,
+    "chars_removed_total_est": 500,
+    "session_has_ai_activity": true
+  },
+  "payload": [
+    {
+      "event_type": "file_edit",
+      "count": 25,
+      "timestamp": "2026-01-15T14:30:00Z"
+    },
+    {
+      "event_type": "ai_accept", 
+      "count": 12,
+      "timestamp": "2026-01-15T14:35:00Z"
+    },
+    {
+      "event_type": "commit",
+      "count": 4,
+      "timestamp": "2026-01-15T14:45:00Z"
+    }
+  ]
+}

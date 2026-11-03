@@ -1,0 +1,28 @@
+{
+  "name": "chaosmonkey-codex-bridge",
+  "version": "0.4.1-codex-bridge",
+  "description": "Fail-open Codex lifecycle telemetry bridge for ChaosMonkey",
+  "main": "bridge.js",
+  "bin": {
+    "chaosmonkey-codex-bridge": "./bridge.js",
+    "chaosmonkey-codex-bridge-install": "./install.js",
+    "chaosmonkey-codex-bridge-uninstall": "./uninstall.js"
+  },
+  "scripts": {
+    "test": "node test/codex-bridge.test.js",
+    "install-bridge": "node install.js",
+    "uninstall-bridge": "node uninstall.js"
+  },
+  "files": [
+    "bridge.js",
+    "install.js",
+    "uninstall.js",
+    "lib.js",
+    "package.json"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "UNLICENSED",
+  "private": true
+}

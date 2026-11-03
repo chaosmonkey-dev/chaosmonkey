@@ -1,0 +1,3124 @@
+// 📋 ARCHITECTURE MAP: See /docs/DASHBOARD_METRICS_ARCHITECTURE_MAP.md
+// ===== PERFORMANCE ENGINE INIT LOGGING =====
+console.warn(
+  "[PI_ENGINE_INIT]",
+  "DEV =", import.meta.env.DEV,
+  "MODE =", import.meta.env.MODE,
+  "DEMO_MODE =", true
+)
+// This is the main performance insights engine with:
+// - Input: PerformanceInputs (EngOutputPoint[] + ToolProductivityPoint[])
+// - Output: PerformanceInsight[] (with severity, tags, evidence, recommendations)
+// - 8 rules that generate insights dynamically
+// - Post-processing: deduplication, priority scoring, diversity selection
+
+import type { EngOutputPoint, ToolProductivityPoint, PerformanceInsight } from './types';
+import { mean, pearson, zscore, lag } from './stats';
+import { pValueFromR } from './stats';
+import { postProcessInsights, diversifyInsights, metricThresholds } from './priority';
+import { dedupeKeepPrimaryTool, equivalenceKey } from '../../engine/dedupe';
+import { selectWithPerToolFloor } from '../../engine/selection';
+import { overlapCount } from './time';
+
+// V6 hotfix sentinels and kill switch
+const PERF_COVERAGE_SWITCH =
+  ((import.meta as any).env?.VITE_PERF_INSIGHTS_COVERAGE ?? 'on').toLowerCase() !== 'off';
+console.log('[PERF_ENGINE_LIVE_V6] loaded', { file: import.meta.url, PERF_COVERAGE_SWITCH });
+
+// Debug flag for performance insights
+const DBG = (import.meta.env.VITE_FEATURE_PERF_INSIGHTS === '1');
+
+/**
+ * 🔧 DEMO MODE CONFIGURATION:
+ * 
+ * DEMO_MODE lowers statistical thresholds so insights fire with:
+ * - Small datasets (2-3 periods vs 4-5)
+ * - Modest correlations (|r| > 0.3 vs > 0.6-0.7)
+ * - Simulated/mixed data
+ * 
+ * This makes the engine produce richer, more varied insights for demos.
+ * For production with real data, set DEMO_MODE = false for stricter stats.
+ * 
+const FORCE_DEMO_INSIGHTS = false  // Set true to bypass rules and return hard-coded demo insights
+ * Adjustable thresholds:
+ * - MIN_POINTS_FOR_CORR: 2 vs 4
+ * - MIN_ABS_R: 0.3 vs 0.6
+ * - MIN_POINTS_FOR_OUTLIER: 2 vs 4  
+ * - P_MAX: 0.15 vs 0.10
+ */
+const DEMO_MODE = true  // TEMP: Force demo mode for local dev
+
+// Production thresholds (strict)
+const PROD_MIN_POINTS = 4
+const PROD_MIN_ABS_R = 0.6
+const PROD_P_MAX = 0.10
+
+// Demo thresholds (very forgiving for small datasets)
+const DEMO_MIN_POINTS = 2
+const DEMO_MIN_ABS_R = 0.05  // Lowered from 0.3
+const DEMO_P_MAX = 0.95      // Increased from 0.15 (more lenient)
+
+// Statistical gating configuration
+const SIG_P = DEMO_MODE ? DEMO_P_MAX : Number(import.meta.env.VITE_PERF_INSIGHTS_P_MAX ?? PROD_P_MAX);
+const MIN_N = DEMO_MODE ? DEMO_MIN_POINTS : Number(import.meta.env.VITE_PERF_INSIGHTS_MIN_PERIODS ?? PROD_MIN_POINTS);
+
+// ===== DEMO Rule Debug Helper =====
+function logRuleDecision(ruleId: string, stats: Record<string, any>) {
+  if (!DEMO_MODE) return
+  console.log('[PI_RULE_DEBUG]', ruleId, stats)
+}
+
+
+// Generate unique IDs for insights
+const safeId = () => `insight-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+// ========== FORMATTING HELPERS (Pass 1) ==========
+
+/**
+ * Format time values in user-friendly units
+ * Avoids showing "0 min" or very small decimals
+ */
+const formatTime = (minutes: number): string => {
+  if (minutes < 1) {
+    return '<1 min';
+  }
+  if (minutes < 60) {
+    return `${Math.round(minutes)} min`;
+  }
+  
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = Math.round(minutes % 60);
+  
+  if (remainingMinutes === 0) {
+    return `${hours}h`;
+  }
+  
+  return `${hours}h ${remainingMinutes}m`;
+};
+
+/**
+ * Format large numbers with K suffix
+ */
+const formatNumber = (num: number): string => {
+  if (num >= 1000) {
+    return `${(num / 1000).toFixed(1)}k`;
+  }
+  return Math.round(num).toString();
+};
+
+/**
+ * Format percentages without excessive decimals
+ */
+const formatPercent = (value: number): string => {
+  if (Math.abs(value) < 0.1) {
+    return '<0.1%';
+  }
+  if (Math.abs(value) < 1) {
+    return `${value.toFixed(1)}%`;
+  }
+  return `${Math.round(value)}%`;
+};
+
+/**
+ * Format time window based on granularity
+ * Converts 'day', 'week', 'month', 'quarter' into user-friendly text
+ */
+const formatWindow = (granularity: string, periodCount?: number): string => {
+  const count = periodCount || 1;
+  switch (granularity) {
+    case 'day':
+      return count === 1 ? 'today' : `over the last ${count} days`;
+    case 'week':
+      return count === 1 ? 'this week' : `over the last ${count} weeks`;
+    case 'month':
+      return count === 1 ? 'this month' : `over the last ${count} months`;
+    case 'quarter':
+      return count === 1 ? 'this quarter' : `over the last ${count} quarters`;
+    default:
+      return `over ${count} periods`;
+  }
+};
+
+/**
+ * Format sample counts for evidence
+ * e.g., "based on 12 PRs and 45 sessions"
+ */
+const formatSampleCount = (prs?: number, sessions?: number): string => {
+  const parts: string[] = [];
+  if (prs && prs > 0) {
+    parts.push(`${prs} PR${prs === 1 ? '' : 's'}`);
+  }
+  if (sessions && sessions > 0) {
+    parts.push(`${sessions} session${sessions === 1 ? '' : 's'}`);
+  }
+  if (parts.length === 0) return '';
+  return `based on ${parts.join(' and ')}`;
+};
+
+/**
+ * Check if a value is effectively zero or too small to display
+ */
+const isEffectivelyZero = (value: number, threshold = 0.001): boolean => {
+  return Math.abs(value) < threshold;
+};
+
+// Generate unique recommendations per tool
+const getUniqueToolRecommendations = (tool: string, efficiency: number, totalAiAssists: number, totalCodingMinutes: number) => {
+  const recommendations: { text: string; actionType: string }[] = [];
+  
+  // Tool-specific recommendations based on performance
+  if (tool.toLowerCase() === 'cursor') {
+    if (efficiency > 0.5) {
+      recommendations.push({ text: 'Share Cursor AI best practices with the team', actionType: 'process' });
+    } else {
+      recommendations.push({ text: 'Review Cursor AI model settings and prompt engineering', actionType: 'tooling' });
+    }
+    recommendations.push({ text: 'Implement Cursor-specific code review guidelines', actionType: 'process' });
+  } else if (tool.toLowerCase() === 'vscode') {
+    if (efficiency > 0.5) {
+      recommendations.push({ text: 'Document VS Code extension configuration for team adoption', actionType: 'process' });
+    } else {
+      recommendations.push({ text: 'Optimize VS Code workspace settings and extensions', actionType: 'tooling' });
+    }
+    recommendations.push({ text: 'Review VS Code debugging and testing workflows', actionType: 'process' });
+  } else if (tool.toLowerCase() === 'jetbrains') {
+    if (efficiency > 0.5) {
+      recommendations.push({ text: 'Create JetBrains refactoring templates for the team', actionType: 'process' });
+    } else {
+      recommendations.push({ text: 'Configure JetBrains code analysis and inspection settings', actionType: 'tooling' });
+    }
+    recommendations.push({ text: 'Review JetBrains project structure and indexing', actionType: 'tooling' });
+  } else if (tool.toLowerCase() === 'windsurf') {
+    if (efficiency > 0.5) {
+      recommendations.push({ text: 'Establish Windsurf AI collaboration workflows', actionType: 'process' });
+    } else {
+      recommendations.push({ text: 'Configure Windsurf AI model selection and filtering', actionType: 'tooling' });
+    }
+    recommendations.push({ text: 'Review Windsurf team sharing and project setup', actionType: 'process' });
+  } else if (tool.toLowerCase() === 'sublime') {
+    if (efficiency > 0.5) {
+      recommendations.push({ text: 'Share Sublime Text build system configurations', actionType: 'process' });
+    } else {
+      recommendations.push({ text: 'Optimize Sublime Text package and theme selection', actionType: 'tooling' });
+    }
+    recommendations.push({ text: 'Review Sublime Text project organization', actionType: 'tooling' });
+  } else if (tool.toLowerCase() === 'vim') {
+    if (efficiency > 0.5) {
+      recommendations.push({ text: 'Create Vim configuration templates for team use', actionType: 'process' });
+    } else {
+      recommendations.push({ text: 'Review Vim plugin performance and configuration', actionType: 'tooling' });
+    }
+    recommendations.push({ text: 'Optimize Vim workflow for complex development tasks', actionType: 'process' });
+  } else {
+    // Generic recommendations for unknown tools
+    if (efficiency > 0.5) {
+      recommendations.push({ text: `Document ${tool} best practices for team adoption`, actionType: 'process' });
+    } else {
+      recommendations.push({ text: `Review ${tool} configuration and performance settings`, actionType: 'tooling' });
+    }
+    recommendations.push({ text: `Optimize ${tool} workflow and team integration`, actionType: 'process' });
+  }
+  
+  return recommendations;
+};
+
+interface PerformanceInputs {
+  engOutput: EngOutputPoint[];
+  productivity: ToolProductivityPoint[];
+  team?: string;
+  repo?: string;
+  granularity?: string;
+  prodGlobalSource?: 'prod-sim' | 'prod-live' | 'prod-hybrid';
+  overlap?: number;
+}
+
+type Rule = (input: PerformanceInputs) => PerformanceInsight[];
+
+// helpers
+const groupByPeriod = <T extends { period: string }>(xs: T[]) => {
+  const m = new Map<string, T[]>();
+  (xs || []).forEach(p => { const arr = m.get(p.period) || []; arr.push(p); m.set(p.period, arr); });
+  return m;
+};
+// Helper function to generate tool-specific recommendations
+const getToolSpecificRecommendations = (tool: string, metric: string, correlation: number, severity: string) => {
+  const recommendations: { text: string; actionType: string }[] = [];
+  
+  // Tool-specific characteristics
+  const toolCharacteristics = {
+    cursor: {
+      strengths: ['AI-first development', 'rapid prototyping', 'code generation'],
+      weaknesses: ['complex refactoring', 'large codebases', 'team collaboration'],
+      focus: 'AI-assisted coding and rapid development'
+    },
+    vscode: {
+      strengths: ['extensibility', 'debugging', 'team collaboration', 'enterprise features'],
+      weaknesses: ['AI integration', 'performance', 'resource usage'],
+      focus: 'comprehensive IDE with strong debugging and collaboration'
+    },
+    jetbrains: {
+      strengths: ['refactoring', 'code analysis', 'enterprise development', 'database tools'],
+      weaknesses: ['AI features', 'resource usage', 'startup time'],
+      focus: 'enterprise development with advanced refactoring'
+    },
+    windsurf: {
+      strengths: ['AI integration', 'modern interface', 'collaboration'],
+      weaknesses: ['maturity', 'plugin ecosystem', 'enterprise features'],
+      focus: 'modern AI-powered development environment'
+    },
+    sublime: {
+      strengths: ['speed', 'lightweight', 'text editing', 'customization'],
+      weaknesses: ['AI features', 'debugging', 'team features'],
+      focus: 'fast, lightweight text editing and scripting'
+    },
+    vim: {
+      strengths: ['efficiency', 'keyboard shortcuts', 'terminal integration', 'customization'],
+      weaknesses: ['learning curve', 'AI integration', 'GUI features'],
+      focus: 'efficient keyboard-driven development'
+    }
+  };
+
+  const toolInfo = toolCharacteristics[tool.toLowerCase()] || {
+    strengths: ['general development'],
+    weaknesses: ['unknown limitations'],
+    focus: 'general development tool'
+  };
+
+  // Generate recommendations based on metric and correlation
+  if (metric === 'cycleTime') {
+    if (correlation > 0) {
+      // Tool is increasing cycle time - negative correlation
+      if (tool.toLowerCase() === 'cursor') {
+        recommendations.push(
+          { text: 'Review Cursor AI suggestions for complex refactoring tasks; consider manual review for large changes', actionType: 'process' },
+          { text: 'Implement Cursor-specific code review checklists for AI-generated code', actionType: 'review_policy' }
+        );
+      } else if (tool.toLowerCase() === 'vscode') {
+        recommendations.push(
+          { text: 'Optimize VS Code extensions and workspace settings to reduce overhead', actionType: 'tooling' },
+          { text: 'Review VS Code debugging and testing workflows for efficiency', actionType: 'process' }
+        );
+      } else if (tool.toLowerCase() === 'jetbrains') {
+        recommendations.push(
+          { text: 'Review JetBrains refactoring scope and complexity; break down large changes', actionType: 'process' },
+          { text: 'Optimize JetBrains indexing and analysis settings for better performance', actionType: 'tooling' }
+        );
+      } else if (tool.toLowerCase() === 'windsurf') {
+        recommendations.push(
+          { text: 'Review Windsurf AI model selection and suggestion filtering', actionType: 'tooling' },
+          { text: 'Implement Windsurf-specific review processes for AI-assisted changes', actionType: 'review_policy' }
+        );
+      } else if (tool.toLowerCase() === 'sublime') {
+        recommendations.push(
+          { text: 'Review Sublime Text build systems and compilation workflows', actionType: 'tooling' },
+          { text: 'Optimize Sublime Text project structure and file organization', actionType: 'process' }
+        );
+      } else if (tool.toLowerCase() === 'vim') {
+        recommendations.push(
+          { text: 'Review Vim configuration and plugin performance impact', actionType: 'tooling' },
+          { text: 'Optimize Vim workflow for complex development tasks', actionType: 'process' }
+        );
+      }
+    } else {
+      // Tool is decreasing cycle time - positive correlation
+      if (tool.toLowerCase() === 'cursor') {
+        recommendations.push(
+          { text: 'Scale Cursor AI workflows across the team; create Cursor best practices guide', actionType: 'training' },
+          { text: 'Expand Cursor licenses and integrate with existing CI/CD pipelines', actionType: 'tooling' }
+        );
+      } else if (tool.toLowerCase() === 'vscode') {
+        recommendations.push(
+          { text: 'Promote VS Code workspace configurations and extensions that improve efficiency', actionType: 'training' },
+          { text: 'Scale VS Code debugging and testing workflows to other teams', actionType: 'process' }
+        );
+      } else if (tool.toLowerCase() === 'jetbrains') {
+        recommendations.push(
+          { text: 'Expand JetBrains licenses and promote advanced refactoring techniques', actionType: 'training' },
+          { text: 'Integrate JetBrains code analysis with automated quality gates', actionType: 'tooling' }
+        );
+      } else if (tool.toLowerCase() === 'windsurf') {
+        recommendations.push(
+          { text: 'Scale Windsurf AI models and collaboration features across teams', actionType: 'training' },
+          { text: 'Integrate Windsurf with existing development workflows and tools', actionType: 'tooling' }
+        );
+      } else if (tool.toLowerCase() === 'sublime') {
+        recommendations.push(
+          { text: 'Promote Sublime Text build systems and scripting workflows', actionType: 'training' },
+          { text: 'Scale Sublime Text configurations for rapid development tasks', actionType: 'process' }
+        );
+      } else if (tool.toLowerCase() === 'vim') {
+        recommendations.push(
+          { text: 'Create Vim training program for efficient keyboard-driven development', actionType: 'training' },
+          { text: 'Scale Vim configurations and plugins across development teams', actionType: 'tooling' }
+        );
+      }
+    }
+  } else if (metric === 'mergeRate') {
+    if (correlation > 0) {
+      // Tool is improving merge rate
+      recommendations.push(
+        { text: `Scale ${tool} workflows that improve code quality and review efficiency`, actionType: 'process' },
+        { text: `Expand ${tool} licenses and create team training programs`, actionType: 'training' }
+      );
+    } else {
+      // Tool is reducing merge rate
+      recommendations.push(
+        { text: `Review ${tool} code quality practices and review processes`, actionType: 'process' },
+        { text: `Implement ${tool}-specific quality gates and testing requirements`, actionType: 'tooling' }
+      );
+    }
+  } else if (metric === 'deploymentFreq') {
+    if (correlation > 0) {
+      recommendations.push(
+        { text: `Scale ${tool} CI/CD integration patterns that increase deployment frequency`, actionType: 'tooling' },
+        { text: `Promote ${tool} automation workflows across development teams`, actionType: 'process' }
+      );
+    } else {
+      recommendations.push(
+        { text: `Review ${tool} build and deployment processes for bottlenecks`, actionType: 'process' },
+        { text: `Optimize ${tool} integration with existing CI/CD pipelines`, actionType: 'tooling' }
+      );
+    }
+  } else if (metric === 'changeFailureRate') {
+    if (correlation > 0) {
+      recommendations.push(
+        { text: `Implement ${tool}-specific quality gates and testing requirements`, actionType: 'tooling' },
+        { text: `Review ${tool} code review processes and validation workflows`, actionType: 'process' }
+      );
+    } else {
+      recommendations.push(
+        { text: `Scale ${tool} quality practices that reduce change failures`, actionType: 'process' },
+        { text: `Promote ${tool} testing and validation workflows`, actionType: 'training' }
+      );
+    }
+  }
+
+  return recommendations;
+};
+
+/** Rule #1: Tool-specific cycle time vs AI-assist usage analysis */
+const ruleCycleTimeVsAI: Rule = ({ engOutput, productivity }) => {
+  if (!engOutput?.length || !productivity?.length) {
+    if (import.meta.env.DEV) {
+      console.debug('[PI_RULE_SKIP] cycle-vs-ai: missing data', {
+        hasGH: !!engOutput?.length,
+        hasProd: !!productivity?.length
+      })
+    }
+    return []
+  }
+
+  // Group productivity data by tool
+  const toolData = new Map<string, ToolProductivityPoint[]>();
+  productivity.forEach(p => {
+    if (p.tool) {
+      const arr = toolData.get(p.tool) || [];
+      arr.push(p);
+      toolData.set(p.tool, arr);
+    }
+  });
+
+  const outByP = groupByPeriod(engOutput);
+  const periods = [...outByP.keys()].sort();
+  if (!periods.length) return [];
+
+  const ct = periods.map(p => {
+    const pts = outByP.get(p) || [];
+    const vals = pts.map(x => x.prCycleTimeHours ?? 0).filter(v => typeof v === 'number' && v > 0);
+    return vals.length ? mean(vals) : undefined;
+  });
+
+  const insights: PerformanceInsight[] = [];
+
+  // Analyze each tool individually
+  for (const [tool, toolPoints] of toolData) {
+    const minPoints = DEMO_MODE ? DEMO_MIN_POINTS : 4
+    if (toolPoints.length < minPoints) {
+      if (import.meta.env.DEV) {
+        console.debug(`[PI_RULE_SKIP] cycle-vs-ai (${tool}): insufficient points`, {
+          points: toolPoints.length,
+          required: minPoints
+        })
+      }
+      continue
+    }
+
+    const toolByP = groupByPeriod(toolPoints);
+    const ai = periods.map(p => {
+      const pts = toolByP.get(p) || [];
+      const sum = pts.reduce((a,b)=> a + (b.aiAssists ?? 0), 0);
+      return sum > 0 ? sum : undefined;
+    });
+
+    // need enough data - reduced requirements
+    const ctCount = ct.filter(v => v !== undefined).length;
+    const aiCount = ai.filter(v => v !== undefined).length;
+    if (ctCount < 2 || aiCount < 2) continue; // Reduced from 4 to 2
+
+    // test small positive lags 0..2
+    const tests = [0,1,2].map(L => {
+      const x:number[] = [], y:number[] = [];
+      const lagged = lag(ai, L);
+      periods.forEach((_, i) => {
+        if (ct[i] !== undefined && lagged[i] !== undefined) { x.push(lagged[i]!); y.push(ct[i]!); }
+      });
+      return { L, r: pearson(x, y), n: x.length };
+    }).filter(t => t.n >= 2); // Reduced from 4 to 2
+
+    if (!tests.length) continue;
+    const best = tests.sort((a,b)=> Math.abs(b.r) - Math.abs(a.r))[0];
+    
+    // Use metric-specific thresholds
+    const { minN, pMax, minAbsR } = metricThresholds('cycle-time')
+    if (!best || best.n < minN || Math.abs(best.r) < minAbsR) continue;
+
+    const ctSeries = ct.filter(v => v !== undefined) as number[];
+    if (ctSeries.length < 3) continue;
+    const lastCt = ctSeries[ctSeries.length - 1];
+    const z = zscore(lastCt, ctSeries.slice(0, -1));
+
+    insights.push({
+      id: safeId(),
+      metricId: 'cycle-time',
+      cicdStage: 'review-merge',  // Added: CI/CD stage for UI organization
+      title: `${tool} AI usage ${best.r > 0 ? 'increases' : 'decreases'} cycle time (lag ${best.L}w, r=${best.r.toFixed(2)})`,
+      description: `${tool} AI-assisted activity ${best.r > 0 ? 'correlates with longer' : 'correlates with shorter'} PR cycle time${best.L ? ` ~${best.L} week(s) later` : ''}. ${best.r > 0 ? 'Could reflect heavier refactors or insufficient review capacity' : 'Indicates efficient AI-assisted workflows'}.`,
+      severity: z > 2 ? 'critical' : z > 1 ? 'warning' : 'info',
+      tags: ['velocity','ai','tools'],
+      related: { tools: [tool] },
+      evidence: [
+        { label: 'Correlation', metric: `corr(${tool}_aiAssists, prCycleTimeHours)`, value: Number(best.r.toFixed(2)) },
+        { label: 'Latest cycle time (hrs)', metric: 'prCycleTimeHours', value: Number((lastCt ?? 0).toFixed(1)) },
+        { label: 'Cycle time z-score', metric: 'zscore', value: Number(z.toFixed(2)) },
+        { label: 'Lag (weeks)', metric: 'lag', value: best.L },
+      ],
+      recommendations: getToolSpecificRecommendations(tool, 'cycleTime', best.r, z > 2 ? 'critical' : z > 1 ? 'warning' : 'info'),
+      source: 'mixed'
+    });
+  }
+
+  return insights;
+};
+
+// --- Rule 2: Comprehensive tool performance analysis ---
+const ruleToolValuePositive: Rule = ({ engOutput, productivity, team }) => {
+  if (!engOutput?.length || !productivity?.length) {
+    if (import.meta.env.DEV) {
+      console.debug('[PI_RULE_SKIP] merge-rate-vs-time: missing data', {
+        hasGH: !!engOutput?.length,
+        hasProd: !!productivity?.length
+      })
+    }
+    return []
+  }
+
+  // Group productivity data by tool
+  const toolData = new Map<string, ToolProductivityPoint[]>();
+  productivity.forEach(p => {
+    if (p.tool) {
+      const arr = toolData.get(p.tool) || [];
+      arr.push(p);
+      toolData.set(p.tool, arr);
+    }
+  });
+
+  // Group by period
+  const outByP = new Map<string, EngOutputPoint[]>();
+  engOutput.forEach(p => { const a = outByP.get(p.period) || []; a.push(p); outByP.set(p.period, a); });
+
+  const prodByP = new Map<string, ToolProductivityPoint[]>();
+  productivity.forEach(p => { const a = prodByP.get(p.period) || []; a.push(p); prodByP.set(p.period, a); });
+
+  const periods = [...new Set([...outByP.keys(), ...prodByP.keys()])].sort();
+  if (!periods.length) return [];
+
+  const mergeRate = periods.map(p => {
+    const pts = outByP.get(p) || [];
+    const vals = pts.map(x => x.mergeRatePct ?? 0).filter(v => v > 0);
+    return vals.length ? mean(vals) : undefined;
+  });
+
+  const cycleTime = periods.map(p => {
+    const pts = outByP.get(p) || [];
+    const vals = pts.map(x => x.prCycleTimeHours ?? 0).filter(v => v > 0);
+    return vals.length ? mean(vals) : undefined;
+  });
+
+  const deploymentFreq = periods.map(p => {
+    const pts = outByP.get(p) || [];
+    const vals = pts.map(x => x.deploymentFreqPerWeek ?? 0).filter(v => v > 0);
+    return vals.length ? mean(vals) : undefined;
+  });
+
+  const changeFailureRate = periods.map(p => {
+    const pts = outByP.get(p) || [];
+    const vals = pts.map(x => x.changeFailureRatePct ?? 0).filter(v => v > 0);
+    return vals.length ? mean(vals) : undefined;
+  });
+
+  const insights: PerformanceInsight[] = [];
+
+  // Analyze each tool against multiple metrics
+  for (const [tool, toolPoints] of toolData) {
+    if (toolPoints.length < 4) continue;
+    
+    const toolByP = groupByPeriod(toolPoints);
+    const codingMins = periods.map(p => {
+      const pts = toolByP.get(p) || [];
+      return pts.reduce((sum, pt) => sum + (pt.codingMinutes ?? 0), 0);
+    });
+
+    const aiAssists = periods.map(p => {
+      const pts = toolByP.get(p) || [];
+      return pts.reduce((sum, pt) => sum + (pt.aiAssists ?? 0), 0);
+    });
+
+    // Test correlation with merge rate
+    if (mergeRate.filter(v => v !== undefined).length >= 4 && codingMins.filter(v => v > 0).length >= 4) {
+      const x: number[] = [], y: number[] = [];
+      periods.forEach((_, i) => {
+        if (mergeRate[i] !== undefined && codingMins[i] > 0) {
+          x.push(codingMins[i]); y.push(mergeRate[i]!);
+        }
+      });
+      
+      if (x.length >= 4) {
+        const r = pearson(x, y);
+        const n = x.length;
+        const p = pValueFromR(r, n);
+        
+        // Statistical gating with metric-specific thresholds
+        const { minN, pMax, minAbsR } = metricThresholds('merge-rate')
+        if (!(n >= minN && p <= pMax && Math.abs(r) >= minAbsR)) continue;
+        
+        if (Math.abs(r) > 0.3) { // Lower threshold to show more insights
+          const lastMR = mergeRate.filter(v => v !== undefined).slice(-1)[0] ?? 0;
+          const avgCoding = mean(codingMins.filter(v => v > 0));
+          
+          insights.push({
+            id: safeId(),
+            metricId: 'merge-rate',
+            title: `${tool} ${r > 0 ? 'improves' : 'reduces'} merge rate (r=${r.toFixed(2)})`,
+            description: `${tool} usage ${r > 0 ? 'correlates with higher' : 'correlates with lower'} merge rates in ${team || 'this team'}. ${r > 0 ? 'Consider expanding' : 'Review'} ${tool} adoption.`,
+            severity: r > 0 ? 'opportunity' : 'warning',
+            tags: ['velocity', 'tools', 'team'],
+            related: { tools: [tool] },
+            evidence: [
+              { label: 'Correlation (r)', metric: `corr(${tool}_codingMinutes, mergeRatePct)`, value: Number(r.toFixed(2)) },
+              { label: 'p', metric: 'p-value', value: Number(p.toFixed(3)) },
+              { label: 'Periods', metric: 'periods', value: n },
+              { label: 'Latest merge rate %', metric: 'mergeRatePct', value: Number(lastMR.toFixed(1)) },
+              { label: 'Avg coding minutes', metric: `${tool}_codingMinutes`, value: Number(avgCoding.toFixed(0)) },
+            ],
+            recommendations: getToolSpecificRecommendations(tool, 'mergeRate', r, Math.abs(r) > 0.6 ? 'warning' : 'info'),
+            source: 'mixed'
+          });
+        }
+      }
+    }
+
+    // Test correlation with cycle time
+    if (cycleTime.filter(v => v !== undefined).length >= 4 && aiAssists.filter(v => v > 0).length >= 4) {
+      const x: number[] = [], y: number[] = [];
+      periods.forEach((_, i) => {
+        if (cycleTime[i] !== undefined && aiAssists[i] > 0) {
+          x.push(aiAssists[i]); y.push(cycleTime[i]!);
+        }
+      });
+      
+      if (x.length >= 4) {
+        const r = pearson(x, y);
+        const n = x.length;
+        const p = pValueFromR(r, n);
+        
+        // Statistical gating with metric-specific thresholds
+        const { minN, pMax, minAbsR } = metricThresholds('cycle-time')
+        if (!(n >= minN && p <= pMax && Math.abs(r) >= minAbsR)) continue;
+        
+        if (Math.abs(r) > 0.3) {
+          const lastCT = cycleTime.filter(v => v !== undefined).slice(-1)[0] ?? 0;
+          const avgAI = mean(aiAssists.filter(v => v > 0));
+          
+          insights.push({
+            id: safeId(),
+            metricId: 'cycle-time',
+            title: `${tool} AI usage ${r > 0 ? 'increases' : 'decreases'} cycle time (r=${r.toFixed(2)})`,
+            description: `${tool} AI assistance ${r > 0 ? 'correlates with longer' : 'correlates with shorter'} PR cycle times. ${r > 0 ? 'Review' : 'Promote'} ${tool} AI workflows.`,
+            severity: Math.abs(r) > 0.6 ? 'warning' : 'info',
+            tags: ['velocity', 'tools', 'ai'],
+            related: { tools: [tool] },
+            evidence: [
+              { label: 'Correlation (r)', metric: `corr(${tool}_aiAssists, prCycleTimeHours)`, value: Number(r.toFixed(2)) },
+              { label: 'p', metric: 'p-value', value: Number(p.toFixed(3)) },
+              { label: 'Periods', metric: 'periods', value: n },
+              { label: 'Latest cycle time (hrs)', metric: 'prCycleTimeHours', value: Number(lastCT.toFixed(1)) },
+              { label: 'Avg AI assists', metric: `${tool}_aiAssists`, value: Number(avgAI.toFixed(0)) },
+            ],
+            recommendations: getToolSpecificRecommendations(tool, 'cycleTime', r, Math.abs(r) > 0.6 ? 'warning' : 'info'),
+            source: 'mixed'
+          });
+        }
+      }
+    }
+
+    // Test correlation with deployment frequency
+    if (deploymentFreq.filter(v => v !== undefined).length >= 4 && codingMins.filter(v => v > 0).length >= 4) {
+      const x: number[] = [], y: number[] = [];
+      periods.forEach((_, i) => {
+        if (deploymentFreq[i] !== undefined && codingMins[i] > 0) {
+          x.push(codingMins[i]); y.push(deploymentFreq[i]!);
+        }
+      });
+      
+      if (x.length >= 4) {
+        const r = pearson(x, y);
+        const n = x.length;
+        const p = pValueFromR(r, n);
+        
+        // Statistical gating with metric-specific thresholds
+        const { minN, pMax, minAbsR } = metricThresholds('deployment-frequency')
+        if (!(n >= minN && p <= pMax && Math.abs(r) >= minAbsR)) continue;
+        
+        if (Math.abs(r) > 0.3) {
+          const lastDF = deploymentFreq.filter(v => v !== undefined).slice(-1)[0] ?? 0;
+          const avgCoding = mean(codingMins.filter(v => v > 0));
+          
+          insights.push({
+            id: safeId(),
+            metricId: 'deployment-frequency',
+            title: `${tool} usage ${r > 0 ? 'increases' : 'decreases'} deployment frequency (r=${r.toFixed(2)})`,
+            description: `${tool} productivity ${r > 0 ? 'correlates with more' : 'correlates with fewer'} deployments. ${r > 0 ? 'Scale' : 'Optimize'} ${tool} workflows.`,
+            severity: Math.abs(r) > 0.6 ? 'warning' : 'info',
+            tags: ['deployment', 'tools', 'productivity'],
+            related: { tools: [tool] },
+            evidence: [
+              { label: 'Correlation (r)', metric: `corr(${tool}_codingMinutes, deploymentFreqPerWeek)`, value: Number(r.toFixed(2)) },
+              { label: 'p', metric: 'p-value', value: Number(p.toFixed(3)) },
+              { label: 'Periods', metric: 'periods', value: n },
+              { label: 'Latest deployments/week', metric: 'deploymentFreqPerWeek', value: Number(lastDF.toFixed(1)) },
+              { label: 'Avg coding minutes', metric: `${tool}_codingMinutes`, value: Number(avgCoding.toFixed(0)) },
+            ],
+            recommendations: getToolSpecificRecommendations(tool, 'deploymentFreq', r, Math.abs(r) > 0.6 ? 'warning' : 'info'),
+            source: 'mixed'
+          });
+        }
+      }
+    }
+
+    // Test correlation with change failure rate
+    if (changeFailureRate.filter(v => v !== undefined).length >= 4 && aiAssists.filter(v => v > 0).length >= 4) {
+      const x: number[] = [], y: number[] = [];
+      periods.forEach((_, i) => {
+        if (changeFailureRate[i] !== undefined && aiAssists[i] > 0) {
+          x.push(aiAssists[i]); y.push(changeFailureRate[i]!);
+        }
+      });
+      
+      if (x.length >= 4) {
+        const r = pearson(x, y);
+        const n = x.length;
+        const p = pValueFromR(r, n);
+        
+        // Statistical gating with metric-specific thresholds
+        const { minN, pMax, minAbsR } = metricThresholds('change-failure-rate')
+        if (!(n >= minN && p <= pMax && Math.abs(r) >= minAbsR)) continue;
+        
+        if (Math.abs(r) > 0.3) {
+          const lastCFR = changeFailureRate.filter(v => v !== undefined).slice(-1)[0] ?? 0;
+          const avgAI = mean(aiAssists.filter(v => v > 0));
+          
+          insights.push({
+            id: safeId(),
+            metricId: 'change-failure-rate',
+            title: `${tool} AI usage ${r > 0 ? 'increases' : 'decreases'} change failure rate (r=${r.toFixed(2)})`,
+            description: `${tool} AI assistance ${r > 0 ? 'correlates with higher' : 'correlates with lower'} change failure rates. ${r > 0 ? 'Review' : 'Promote'} ${tool} quality practices.`,
+            severity: Math.abs(r) > 0.6 ? 'critical' : 'warning',
+            tags: ['quality', 'tools', 'ai'],
+            related: { tools: [tool] },
+            evidence: [
+              { label: 'Correlation (r)', metric: `corr(${tool}_aiAssists, changeFailureRatePct)`, value: Number(r.toFixed(2)) },
+              { label: 'p', metric: 'p-value', value: Number(p.toFixed(3)) },
+              { label: 'Periods', metric: 'periods', value: n },
+              { label: 'Latest failure rate %', metric: 'changeFailureRatePct', value: Number(lastCFR.toFixed(1)) },
+              { label: 'Avg AI assists', metric: `${tool}_aiAssists`, value: Number(avgAI.toFixed(0)) },
+            ],
+            recommendations: getToolSpecificRecommendations(tool, 'changeFailureRate', r, Math.abs(r) > 0.6 ? 'critical' : 'warning'),
+            source: 'mixed'
+          });
+        }
+      }
+    }
+  }
+
+  return insights;
+};
+
+// --- Rule 4: Tool-specific performance analysis ---
+const ruleToolSpecificPerformance: Rule = ({ engOutput, productivity }) => {
+  if (!engOutput?.length || !productivity?.length) return [];
+
+  // Group productivity data by tool
+  const toolData = new Map<string, ToolProductivityPoint[]>();
+  productivity.forEach(p => {
+    if (p.tool) {
+      const arr = toolData.get(p.tool) || [];
+      arr.push(p);
+      toolData.set(p.tool, arr);
+    }
+  });
+
+  // Group eng output by period
+  const outByP = groupByPeriod(engOutput);
+  const periods = [...outByP.keys()].sort();
+  if (periods.length < 4) return [];
+
+  const insights: PerformanceInsight[] = [];
+
+  // For each tool, calculate its correlation with engineering metrics
+  for (const [tool, toolPoints] of toolData) {
+    if (toolPoints.length < 4) continue;
+
+    // Group tool data by period
+    const toolByP = groupByPeriod(toolPoints);
+    
+    // Calculate AI assists and coding minutes by period for this tool
+    const aiAssists = periods.map(p => {
+      const pts = toolByP.get(p) || [];
+      return pts.reduce((sum, pt) => sum + (pt.aiAssists ?? 0), 0);
+    });
+    
+    const codingMinutes = periods.map(p => {
+      const pts = toolByP.get(p) || [];
+      return pts.reduce((sum, pt) => sum + (pt.codingMinutes ?? 0), 0);
+    });
+
+    // Calculate merge rate by period
+    const mergeRate = periods.map(p => {
+      const pts = outByP.get(p) || [];
+      const vals = pts.map(x => x.mergeRatePct ?? 0).filter(v => v > 0);
+      return vals.length ? mean(vals) : undefined;
+    });
+
+    // Calculate cycle time by period
+    const cycleTime = periods.map(p => {
+      const pts = outByP.get(p) || [];
+      const vals = pts.map(x => x.prCycleTimeHours ?? 0).filter(v => v > 0);
+      return vals.length ? mean(vals) : undefined;
+    });
+
+    // Test correlation between tool usage and merge rate
+    const mergeRateValid = mergeRate.filter(v => v !== undefined).length >= 4;
+    const aiAssistsValid = aiAssists.filter(v => v > 0).length >= 4;
+    
+    if (mergeRateValid && aiAssistsValid) {
+      const x: number[] = [], y: number[] = [];
+      periods.forEach((_, i) => {
+        if (mergeRate[i] !== undefined && aiAssists[i] > 0) {
+          x.push(aiAssists[i]);
+          y.push(mergeRate[i]!);
+        }
+      });
+      
+      if (x.length >= 4) {
+        const r = pearson(x, y);
+        if (Math.abs(r) > 0.5) {
+          const lastMR = mergeRate.filter(v => v !== undefined).slice(-1)[0] ?? 0;
+          const avgAI = mean(aiAssists.filter(v => v > 0));
+          
+          insights.push({
+            id: safeId(),
+            title: `${tool} shows ${r > 0 ? 'positive' : 'negative'} correlation with merge rate (r=${r.toFixed(2)})`,
+            description: `${tool} usage ${r > 0 ? 'correlates with higher' : 'correlates with lower'} merge rates. ${r > 0 ? 'Consider expanding' : 'Review'} ${tool} adoption and configuration.`,
+            severity: Math.abs(r) > 0.7 ? 'warning' : 'info',
+            tags: ['velocity', 'tools', 'team'],
+            related: { tools: [tool] },
+            evidence: [
+              { label: 'Correlation (r)', metric: `corr(${tool}_aiAssists, mergeRatePct)`, value: Number(r.toFixed(2)) },
+              { label: 'Latest merge rate %', metric: 'mergeRatePct', value: Number(lastMR.toFixed(1)) },
+              { label: 'Avg AI assists', metric: `${tool}_aiAssists`, value: Number(avgAI.toFixed(0)) },
+              { label: 'Periods', metric: 'periods', value: x.length },
+            ],
+            recommendations: [
+              { text: `${r > 0 ? 'Expand' : 'Review'} ${tool} licenses/configs for teams with high merge rates.`, actionType: 'tooling' },
+              { text: `${r > 0 ? 'Promote' : 'Investigate'} ${tool} best practices and team training.`, actionType: r > 0 ? 'training' : 'process' },
+            ],
+            source: 'mixed'
+          });
+        }
+      }
+    }
+
+    // Test correlation between tool usage and cycle time
+    const cycleTimeValid = cycleTime.filter(v => v !== undefined).length >= 4;
+    if (cycleTimeValid && aiAssistsValid) {
+      const x: number[] = [], y: number[] = [];
+      periods.forEach((_, i) => {
+        if (cycleTime[i] !== undefined && aiAssists[i] > 0) {
+          x.push(aiAssists[i]);
+          y.push(cycleTime[i]!);
+        }
+      });
+      
+      if (x.length >= 4) {
+        const r = pearson(x, y);
+        if (Math.abs(r) > 0.5) {
+          const lastCT = cycleTime.filter(v => v !== undefined).slice(-1)[0] ?? 0;
+          const avgAI = mean(aiAssists.filter(v => v > 0));
+          
+          insights.push({
+            id: safeId(),
+            title: `${tool} usage ${r > 0 ? 'increases' : 'decreases'} cycle time (r=${r.toFixed(2)})`,
+            description: `${tool} usage ${r > 0 ? 'correlates with longer' : 'correlates with shorter'} PR cycle times. ${r > 0 ? 'Review' : 'Promote'} ${tool} workflows and review processes.`,
+            severity: Math.abs(r) > 0.7 ? 'warning' : 'info',
+            tags: ['velocity', 'tools', 'team'],
+            related: { tools: [tool] },
+            evidence: [
+              { label: 'Correlation (r)', metric: `corr(${tool}_aiAssists, prCycleTimeHours)`, value: Number(r.toFixed(2)) },
+              { label: 'Latest cycle time (hrs)', metric: 'prCycleTimeHours', value: Number(lastCT.toFixed(1)) },
+              { label: 'Avg AI assists', metric: `${tool}_aiAssists`, value: Number(avgAI.toFixed(0)) },
+              { label: 'Periods', metric: 'periods', value: x.length },
+            ],
+            recommendations: [
+              { text: `${r > 0 ? 'Review' : 'Expand'} ${tool} usage patterns and review capacity.`, actionType: 'process' },
+              { text: `${r > 0 ? 'Add' : 'Promote'} ${tool} quality gates and testing workflows.`, actionType: 'tooling' },
+            ],
+            source: 'mixed'
+          });
+        }
+      }
+    }
+  }
+
+  return insights;
+};
+
+// --- Rule 3: Change failure rate ↑ alongside AI assists (quality risk) ---
+const ruleFailureVsAI: Rule = ({ engOutput, productivity }) => {
+
+  // recent window to reduce noise
+  const out = engOutput.slice(-12);
+  const prod = productivity.slice(-12);
+  const cfr = out.map(o => o.changeFailureRatePct).filter(v => typeof v === 'number') as number[];
+  const ai  = prod.map(p => p.aiAssists).filter(v => typeof v === 'number') as number[];
+  if (cfr.length < 4 || ai.length < 4) return [];
+
+  const r = pearson(ai, cfr);
+  const { minN, pMax, minAbsR } = metricThresholds('change-failure-rate')
+  if (r < minAbsR || ai.length < minN) return [];
+
+  const last = cfr[cfr.length-1];
+  const z = zscore(last, cfr.slice(0,-1));
+  if (z < 1) return [];
+
+  return [{
+    id: safeId(),
+    title: 'Change failure rate rising alongside AI-assisted edits',
+    description: 'Quality regressions may stem from insufficient tests or review rigor on AI-assisted code.',
+    severity: z > 2 ? 'critical' : 'warning',
+    tags: ['quality','ai','tools'],
+    related: { tools: ['*'] },
+    evidence: [
+      { label: 'Correlation', metric: 'corr(aiAssists, changeFailureRatePct)', value: Number(r.toFixed(2)) },
+      { label: 'Latest CFR %', metric: 'changeFailureRatePct', value: Number(last.toFixed(1)) },
+      { label: 'CFR z-score', metric: 'zscore', value: Number(z.toFixed(2)) },
+    ],
+    recommendations: [
+      { text: 'Gate risky paths with test minimums for AI-authored diffs.', actionType: 'tooling' },
+      { text: 'Require "test-diff" evidence in PR descriptions for AI chunks.', actionType: 'review_policy' },
+    ],
+    source: 'mixed'
+  }];
+};
+
+// ---- Insufficient Data rule (consolidated hint) ----
+const MIN_PERIODS = 4;
+
+const overlapCount = (
+  periods: string[],
+  a: (number | undefined)[],
+  b: (number | undefined)[]
+) => {
+  // Guard against invalid inputs
+  if (!Array.isArray(periods) || !Array.isArray(a) || !Array.isArray(b)) {
+    if (import.meta.env.DEV) {
+      console.warn('[overlapCount] Invalid inputs:', { 
+        periodsIsArray: Array.isArray(periods),
+        aIsArray: Array.isArray(a), 
+        bIsArray: Array.isArray(b) 
+      });
+    }
+    return 0;
+  }
+  
+  let n = 0;
+  for (let i = 0; i < periods.length; i++) {
+    if (a[i] !== undefined && b[i] !== undefined) n++;
+  }
+  return n;
+};
+
+const ruleInsufficientData: Rule = (context) => {
+  const { engOutput, productivity, overlap, ghSeries, prodSeries } = context;
+  
+  const usedOverlap = context?.overlap ?? overlapCount(context?.ghSeries || [], context?.prodSeries || []);
+  console.log('[RULE_INSUFF_ACTIVE_V2]', { usedOverlap, gh: (context?.ghSeries||[]).length, prod: (context?.prodSeries||[]).length });
+  
+  console.log('🔍 ruleInsufficientData - engOutput length:', engOutput?.length || 0)
+  console.log('🔍 ruleInsufficientData - productivity length:', productivity?.length || 0)
+  console.log('🔍 ruleInsufficientData - precomputed overlap:', overlap)
+  console.log('🔍 ruleInsufficientData - engOutput data:', engOutput)
+  console.log('🔍 ruleInsufficientData - productivity data:', productivity)
+  
+  // ALIGNED WITH HARNESS: overlap >= 2 is good enough
+  const hasEngOutput = engOutput?.length > 0;
+  const hasProductivity = productivity?.length > 0;
+  const combined = hasEngOutput && hasProductivity;
+  const shouldShowCoverage = PERF_COVERAGE_SWITCH && combined && (usedOverlap < 2);
+
+  if (!combined) {
+    console.log('[PERF_ENGINE_LIVE_V6] coverage suppressed - single dataset');
+    return [];
+  }
+
+  if (!shouldShowCoverage) {
+    console.log('[PERF_ENGINE_LIVE_V6] coverage suppressed - sufficient overlap');
+    return [];
+  }
+
+  console.log('🔍 ruleInsufficientData - RETURNING INSUFFICIENT DATA INSIGHT')
+  return [{
+    id: safeId(),
+    title: 'Not enough series to analyze cross-dataset insights',
+    description: 'We need both Engineering Output and Productivity-by-Tool time series. Try widening the date range or selecting more teams/tools.',
+    severity: 'info',
+    tags: ['data','coverage'],
+    equivalenceKey: 'coverage/insufficient',
+    related: {},
+    evidence: [],
+    recommendations: [
+      { text: 'Increase time range to include ≥4 periods.', actionType: 'process' },
+      { text: 'Select additional teams/tools or clear filters.', actionType: 'process' }
+    ],
+    source: 'mixed'
+  }];
+  
+  console.log('🔍 ruleInsufficientData - SUFFICIENT OVERLAP, RETURNING EMPTY')
+  return []
+
+  // Build aligned period grid
+  const outByP = new Map<string, EngOutputPoint[]>();
+  engOutput.forEach(p => { const a = outByP.get(p.period) || []; a.push(p); outByP.set(p.period, a); });
+
+  const prodByP = new Map<string, ToolProductivityPoint[]>();
+  productivity.forEach(p => { const a = prodByP.get(p.period) || []; a.push(p); prodByP.set(p.period, a); });
+
+  const periods = [...new Set([...outByP.keys(), ...prodByP.keys()])].sort();
+  if (!periods.length) {
+    return [{
+      id: safeId(),
+      title: 'No overlapping periods after filters',
+      description: 'Filters removed all overlapping weeks between Engineering Output and Productivity data.',
+      severity: 'info',
+      tags: ['data','coverage'],
+      related: {},
+      evidence: [],
+      recommendations: [
+        { text: 'Widen the date range or clear some filters.', actionType: 'process' }
+      ],
+      source: 'mixed'
+    }];
+  }
+
+  // Build aligned metric arrays
+  const meanOrUndef = (xs: (number | undefined)[]) => {
+    const v = xs.filter((z): z is number => typeof z === 'number');
+    return v.length ? mean(v) : undefined;
+  };
+
+  const prCycleTime = periods.map(p => meanOrUndef((outByP.get(p) || []).map(x => x.prCycleTimeHours)));
+  const mergeRate    = periods.map(p => meanOrUndef((outByP.get(p) || []).map(x => x.mergeRatePct)));
+  const changeFail   = periods.map(p => meanOrUndef((outByP.get(p) || []).map(x => x.changeFailureRatePct)));
+
+  const aiAssists = periods.map(p => {
+    const pts = prodByP.get(p) || [];
+    const sum = pts.reduce((a,b)=> a + (b.aiAssists ?? 0), 0);
+    return sum > 0 ? sum : undefined;
+  });
+
+  const codingMins = periods.map(p => {
+    const pts = prodByP.get(p) || [];
+    const sum = pts.reduce((a,b)=> a + (b.codingMinutes ?? 0), 0);
+    return sum > 0 ? sum : undefined;
+  });
+
+  // Pairs required by our current rules
+  const pairs = [
+    { label: 'AI assists ↔ PR cycle time', a: aiAssists, b: prCycleTime },
+    { label: 'Coding minutes ↔ Merge rate', a: codingMins, b: mergeRate },
+    { label: 'AI assists ↔ Change failure rate', a: aiAssists, b: changeFail },
+  ];
+
+  const shortages = pairs.map(p => ({
+    label: p.label,
+    overlap: overlapCount(periods, p.a, p.b)
+  })).filter(x => x.overlap < MIN_PERIODS);
+
+  if (!shortages.length) return []; // Enough data → let analytic rules run
+
+  return [{
+    id: safeId(),
+    title: 'Insufficient overlapping data to generate some insights',
+    description: `At least ${MIN_PERIODS} overlapping periods are required for robust signals. One or more metric pairs don't meet this threshold under current filters.`,
+    severity: 'info',
+    tags: ['data','coverage'],
+    related: {},
+    evidence: shortages.map(s => ({ label: s.label, metric: 'overlapPeriods', value: s.overlap })),
+    recommendations: [
+      { text: `Widen the date range to include ≥${MIN_PERIODS} periods.`, actionType: 'process' },
+      { text: 'Include more teams/tools or clear narrow filters.', actionType: 'process' }
+    ],
+    source: 'mixed'
+  }];
+};
+
+// --- Rule 4: Tool impact by team (coding minutes ↔ merge rate, per team & tool) ---
+const ruleToolImpactByTeam: Rule = ({ engOutput, productivity }) => {
+  if (!engOutput?.length || !productivity?.length) return [];
+  const periods = Array.from(new Set([
+    ...engOutput.map(p => p.period),
+    ...productivity.map(p => p.period),
+  ])).sort();
+  if (periods.length < 4) return [];
+
+  // index: team -> period -> EngOutputPoint[]
+  const outByTeam = new Map<string, Map<string, EngOutputPoint[]>>();
+  engOutput.forEach(p => {
+    const t = p.team || 'default-team';
+    const pm = outByTeam.get(t) || new Map<string, EngOutputPoint[]>();
+    const arr = pm.get(p.period) || [];
+    arr.push(p);
+    pm.set(p.period, arr);
+    outByTeam.set(t, pm);
+  });
+
+  // index: team||tool -> period -> ToolProductivityPoint[]
+  const prodByTeamTool = new Map<string, Map<string, ToolProductivityPoint[]>>();
+  productivity.forEach(p => {
+    const key = `${p.team || 'default-team'}||${p.tool}`;
+    const pm = prodByTeamTool.get(key) || new Map<string, ToolProductivityPoint[]>();
+    const arr = pm.get(p.period) || [];
+    arr.push(p);
+    pm.set(p.period, arr);
+    prodByTeamTool.set(key, pm);
+  });
+
+  const results: PerformanceInsight[] = [];
+
+  for (const [key, perMap] of prodByTeamTool.entries()) {
+    const [team, tool] = key.split('||');
+    const outPer = outByTeam.get(team);
+    if (!outPer) continue;
+
+    const mr: (number|undefined)[] = [];
+    const coding: (number|undefined)[] = [];
+
+    periods.forEach(p => {
+      const outs = outPer.get(p) || [];
+      const mrs = outs.map(o => o.mergeRatePct ?? 0).filter(v => v > 0);
+      mr.push(mrs.length ? mean(mrs) : undefined);
+
+      const prods = perMap.get(p) || [];
+      const sumCoding = prods.reduce((a,b)=> a + (b.codingMinutes ?? 0), 0);
+      coding.push(sumCoding > 0 ? sumCoding : undefined);
+    });
+
+    const x:number[] = [], y:number[] = [];
+    for (let i=0;i<periods.length;i++) {
+      if (mr[i] !== undefined && coding[i] !== undefined) { x.push(coding[i]!); y.push(mr[i]!); }
+    }
+    if (x.length < 4) continue;
+
+    const r = pearson(x, y);
+    const { minN, pMax, minAbsR } = metricThresholds('merge-rate')
+    if (r < minAbsR || x.length < minN) continue;
+    const latestMR = (mr.filter(v=>v!==undefined) as number[]).slice(-1)[0] ?? 0;
+
+    results.push({
+      id: safeId(),
+      title: `${tool} usage correlates with higher merge rate`,
+      description: `In ${team === 'default-team' ? 'this team' : team}, increased productive time in ${tool} aligns with a higher share of PRs merging.`,
+      severity: 'opportunity', // Positive correlation is always an opportunity
+      tags: ['velocity','tools','team'],
+      related: { teams: [team], tools: [tool] },
+      evidence: [
+        { label: 'Correlation (r)', metric: 'corr(codingMinutes, mergeRatePct)', value: Number(r.toFixed(2)) },
+        { label: 'Latest merge rate %', metric: 'mergeRatePct', value: Number(latestMR.toFixed(1)) },
+        { label: 'Periods', metric: 'n', value: x.length },
+      ],
+      recommendations: [
+        { text: `Expand ${tool} licenses/configs for ${team}.`, actionType: 'tooling' },
+        { text: `Standardize effective ${tool} setups (snippets/templates).`, actionType: 'process' },
+      ],
+      source: 'mixed'
+    });
+  }
+
+  // cap fan-out
+  return results
+    .sort((a,b) =>
+      Number(b.evidence.find(e=>e.metric==='corr(codingMinutes, mergeRatePct)')?.value ?? 0) -
+      Number(a.evidence.find(e=>e.metric==='corr(codingMinutes, mergeRatePct)')?.value ?? 0)
+    )
+    .slice(0, 3);
+};
+
+// --- Rule 5: Developer quality outlier with high AI assists (per developer) ---
+const ruleDevQualityOutlier: Rule = ({ engOutput, productivity }) => {
+  if (!engOutput?.length || !productivity?.length) return [];
+  const hasDev = engOutput.some((p:any) => p.developer) && productivity.some((p:any) => p.developer);
+  if (!hasDev) return [];
+
+  const periods = Array.from(new Set(engOutput.map(p => p.period))).sort();
+  if (periods.length < 4) return [];
+
+  const outByP = new Map<string, EngOutputPoint[]>(); engOutput.forEach(p => {
+    const arr = outByP.get(p.period) || []; arr.push(p); outByP.set(p.period, arr);
+  });
+  const prodByP = new Map<string, ToolProductivityPoint[]>(); productivity.forEach(p => {
+    const arr = prodByP.get(p.period) || []; arr.push(p); prodByP.set(p.period, arr);
+  });
+
+  const devs = new Set<string>(); engOutput.forEach((p:any) => p.developer && devs.add(p.developer));
+
+  const insights: PerformanceInsight[] = [];
+  for (const dev of devs) {
+    const cfr:(number|undefined)[] = []; const assists:(number|undefined)[] = [];
+    periods.forEach(per => {
+      const outs = (outByP.get(per) || []).filter((o:any) => o.developer === dev);
+      const prods = (prodByP.get(per) || []).filter((q:any) => q.developer === dev);
+
+      const cfrVals = outs.map(o => o.changeFailureRatePct ?? 0).filter(v => v > 0);
+      cfr.push(cfrVals.length ? mean(cfrVals) : undefined);
+
+      const aiSum = prods.reduce((a,b)=> a + (b.aiAssists ?? 0), 0);
+      assists.push(aiSum > 0 ? aiSum : undefined);
+    });
+
+    const x:number[] = [], y:number[] = [];
+    for (let i=0;i<periods.length;i++) if (assists[i]!==undefined && cfr[i]!==undefined) { x.push(assists[i]!); y.push(cfr[i]!); }
+    if (x.length < 4) continue;
+
+    const r = pearson(x, y);
+    const { minN, pMax, minAbsR } = metricThresholds('change-failure-rate')
+    if (r < minAbsR || x.length < minN) continue;
+
+    const vals = y.filter(v => v !== undefined) as number[];
+    if (vals.length < 3) continue;
+    const latest = vals[vals.length-1];
+    const z = zscore(latest, vals.slice(0, -1));
+    if (z < 1.5) continue;
+
+    insights.push({
+      id: safeId(),
+      title: `Developer ${dev}: elevated change failure rate with high AI assists`,
+      description: `Recent spikes in AI-assisted edits for ${dev} align with a higher change failure rate.`,
+      severity: z > 2.5 ? 'critical' : 'warning',
+      tags: ['quality','ai','developer'],
+      related: { developers: [dev] },
+      evidence: [
+        { label: 'Correlation (r)', metric: 'corr(aiAssists, changeFailureRatePct)', value: Number(r.toFixed(2)) },
+        { label: 'Latest CFR %', metric: 'changeFailureRatePct', value: Number(latest.toFixed(1)) },
+        { label: 'CFR z-score', metric: 'zscore', value: Number(z.toFixed(2)) },
+        { label: 'Periods', metric: 'n', value: x.length },
+      ],
+      recommendations: [
+        { text: 'Add targeted review checklist for AI-heavy diffs.', actionType: 'review_policy' },
+        { text: 'Pair on tests; ensure regression coverage.', actionType: 'process' },
+      ],
+      source: 'mixed'
+    });
+  }
+
+  // top 3 by z-score
+  return insights.sort((a,b) => {
+    const za = Number(a.evidence.find(e=>e.metric==='zscore')?.value ?? 0);
+    const zb = Number(b.evidence.find(e=>e.metric==='zscore')?.value ?? 0);
+    return zb - za;
+  }).slice(0, 3);
+};
+
+// Simple rule that detects basic performance issues
+const ruleBasicPerformanceIssues: Rule = ({ engOutput, productivity }) => {
+  if (!engOutput?.length) return [];
+  
+  const insights: PerformanceInsight[] = [];
+  
+  // Check for high cycle times
+  const cycleTimes = engOutput.map(e => e.prCycleTimeHours).filter(t => t > 0);
+  if (cycleTimes.length > 0) {
+    const avgCycleTime = mean(cycleTimes);
+    const maxCycleTime = Math.max(...cycleTimes);
+    
+    if (avgCycleTime > 24) { // More than 24 hours average
+      insights.push({
+        id: 'high-cycle-time-' + Date.now(),
+        title: 'High PR Cycle Time Detected',
+        description: `Average PR cycle time is ${avgCycleTime.toFixed(1)} hours, with maximum of ${maxCycleTime.toFixed(1)} hours. This indicates potential bottlenecks in the review process.`,
+        severity: avgCycleTime > 48 ? 'critical' : 'warning',
+        tags: ['cycle-time', 'review-process'],
+        related: {},
+        evidence: [
+          { label: 'Average Cycle Time', value: avgCycleTime.toFixed(1) + ' hours' },
+          { label: 'Maximum Cycle Time', value: maxCycleTime.toFixed(1) + ' hours' },
+          { label: 'Data Points', value: cycleTimes.length }
+        ],
+        recommendations: [
+          { text: 'Review PR review process and identify bottlenecks', actionType: 'process' },
+          { text: 'Consider implementing automated checks to reduce manual review time', actionType: 'tooling' }
+        ],
+        source: 'github'
+      });
+    }
+  }
+  
+  // Check for low merge rates
+  const mergeRates = engOutput.map(e => e.mergeRatePct).filter(r => r > 0);
+  if (mergeRates.length > 0) {
+    const avgMergeRate = mean(mergeRates);
+    
+    if (avgMergeRate < 70) { // Less than 70% merge rate
+      insights.push({
+        id: 'low-merge-rate-' + Date.now(),
+        title: 'Low PR Merge Rate Detected',
+        description: `Average merge rate is ${avgMergeRate.toFixed(1)}%, which indicates potential issues with PR quality or review process.`,
+        severity: avgMergeRate < 50 ? 'critical' : 'warning',
+        tags: ['merge-rate', 'quality'],
+        related: {},
+        evidence: [
+          { label: 'Average Merge Rate', value: avgMergeRate.toFixed(1) + '%' },
+          { label: 'Data Points', value: mergeRates.length }
+        ],
+        recommendations: [
+          { text: 'Review PR quality standards and pre-submission checks', actionType: 'process' },
+          { text: 'Implement better PR templates and guidelines', actionType: 'process' }
+        ],
+        source: 'github'
+      });
+    }
+  }
+  
+  return insights;
+};
+
+// Tool-specific performance analysis rule
+const ruleToolPerformanceAnalysis: Rule = ({ engOutput, productivity }) => {
+  if (!productivity?.length) return [];
+  
+  const insights: PerformanceInsight[] = [];
+  
+  // Group productivity data by tool
+  const toolData = new Map<string, ToolProductivityPoint[]>();
+  productivity.forEach(p => {
+    if (p.tool) {
+      const arr = toolData.get(p.tool) || [];
+      arr.push(p);
+      toolData.set(p.tool, arr);
+    }
+  });
+  
+  // Analyze each tool
+  for (const [tool, toolPoints] of toolData) {
+    if (toolPoints.length < 2) continue;
+    
+    // Calculate metrics for this tool
+    const aiAssists = toolPoints.map(p => p.aiAssists || 0);
+    const codingMinutes = toolPoints.map(p => p.codingMinutes || 0);
+    
+    const avgAiAssists = mean(aiAssists);
+    const avgCodingMinutes = mean(codingMinutes);
+    const totalAiAssists = aiAssists.reduce((a, b) => a + b, 0);
+    const totalCodingMinutes = codingMinutes.reduce((a, b) => a + b, 0);
+    
+    // Check for trends over time
+    const periods = toolPoints.map(p => p.period).sort();
+    const aiTrend = aiAssists.length > 1 ? (aiAssists[aiAssists.length - 1] - aiAssists[0]) / aiAssists[0] : 0;
+    const codingTrend = codingMinutes.length > 1 ? (codingMinutes[codingMinutes.length - 1] - codingMinutes[0]) / codingMinutes[0] : 0;
+    
+    // Generate insights based on tool performance
+    if (avgAiAssists > 50) {
+      insights.push({
+        id: `high-ai-usage-${tool}-${Date.now()}`,
+        title: `High AI Usage Detected in ${tool.toUpperCase()}`,
+        description: `${tool.toUpperCase()} shows high AI assistance usage with ${avgAiAssists.toFixed(1)} average assists per period. ${aiTrend > 0.2 ? 'Usage is increasing over time.' : aiTrend < -0.2 ? 'Usage is decreasing over time.' : 'Usage is stable.'}`,
+        severity: avgAiAssists > 100 ? 'critical' : 'warning',
+        tags: ['ai-usage', 'tool-performance', tool],
+        related: { tools: [tool] },
+        evidence: [
+          { label: 'Average AI Assists', value: avgAiAssists.toFixed(1) },
+          { label: 'Total AI Assists', value: totalAiAssists },
+          { label: 'Usage Trend', value: aiTrend > 0.2 ? 'Increasing' : aiTrend < -0.2 ? 'Decreasing' : 'Stable' },
+          { label: 'Data Points', value: toolPoints.length }
+        ],
+        recommendations: [
+          { text: `Review ${tool} AI configuration and usage patterns`, actionType: 'tooling' },
+          { text: `Consider optimizing ${tool} AI suggestions for better productivity`, actionType: 'process' }
+        ],
+        source: 'productivity'
+      });
+    }
+    
+    if (avgCodingMinutes > 120) {
+      insights.push({
+        id: `high-coding-time-${tool}-${Date.now()}`,
+        title: `High Coding Time Detected in ${tool.toUpperCase()}`,
+        description: `${tool.toUpperCase()} shows high coding time with ${avgCodingMinutes.toFixed(1)} minutes average per period. ${codingTrend > 0.2 ? 'Time is increasing over time.' : codingTrend < -0.2 ? 'Time is decreasing over time.' : 'Time is stable.'}`,
+        severity: avgCodingMinutes > 200 ? 'critical' : 'warning',
+        tags: ['coding-time', 'tool-performance', tool],
+        related: { tools: [tool] },
+        evidence: [
+          { label: 'Average Coding Minutes', value: avgCodingMinutes.toFixed(1) },
+          { label: 'Total Coding Minutes', value: totalCodingMinutes },
+          { label: 'Time Trend', value: codingTrend > 0.2 ? 'Increasing' : codingTrend < -0.2 ? 'Decreasing' : 'Stable' },
+          { label: 'Data Points', value: toolPoints.length }
+        ],
+        recommendations: [
+          { text: `Review ${tool} workflow efficiency and potential bottlenecks`, actionType: 'process' },
+          { text: `Consider ${tool} performance optimization and configuration`, actionType: 'tooling' }
+        ],
+        source: 'productivity'
+      });
+    }
+  }
+  
+  return insights;
+};
+
+// Tool comparison and ranking rule
+const ruleToolComparison: Rule = ({ engOutput, productivity }) => {
+  if (!productivity?.length) return [];
+  
+  const insights: PerformanceInsight[] = [];
+  
+  // Group productivity data by tool
+  const toolData = new Map<string, ToolProductivityPoint[]>();
+  productivity.forEach(p => {
+    if (p.tool) {
+      const arr = toolData.get(p.tool) || [];
+      arr.push(p);
+      toolData.set(p.tool, arr);
+    }
+  });
+  
+  if (toolData.size < 2) return []; // Need at least 2 tools to compare
+  
+  // Calculate performance metrics for each tool
+  const toolMetrics = new Map<string, { aiAssists: number, codingMinutes: number, efficiency: number }>();
+  
+  for (const [tool, toolPoints] of toolData) {
+    const aiAssists = toolPoints.map(p => p.aiAssists || 0);
+    const codingMinutes = toolPoints.map(p => p.codingMinutes || 0);
+    
+    const avgAiAssists = mean(aiAssists);
+    const avgCodingMinutes = mean(codingMinutes);
+    const efficiency = avgCodingMinutes > 0 ? avgAiAssists / avgCodingMinutes : 0; // AI assists per minute
+    
+    toolMetrics.set(tool, { aiAssists: avgAiAssists, codingMinutes: avgCodingMinutes, efficiency });
+  }
+  
+  // Find top and bottom performers
+  const sortedByEfficiency = Array.from(toolMetrics.entries())
+    .sort((a, b) => b[1].efficiency - a[1].efficiency);
+  
+  if (sortedByEfficiency.length >= 2) {
+    const [topTool, topMetrics] = sortedByEfficiency[0];
+    const [bottomTool, bottomMetrics] = sortedByEfficiency[sortedByEfficiency.length - 1];
+    
+    insights.push({
+      id: `tool-comparison-${Date.now()}`,
+      title: 'Tool Performance Comparison',
+      description: `${topTool.toUpperCase()} shows highest AI efficiency (${topMetrics.efficiency.toFixed(3)} assists/min), while ${bottomTool.toUpperCase()} shows lowest efficiency (${bottomMetrics.efficiency.toFixed(3)} assists/min).`,
+      severity: 'info',
+      tags: ['tool-comparison', 'efficiency'],
+      related: { tools: [topTool, bottomTool] },
+      evidence: [
+        { label: 'Top Performer', value: `${topTool.toUpperCase()} (${topMetrics.efficiency.toFixed(3)} assists/min)` },
+        { label: 'Bottom Performer', value: `${bottomTool.toUpperCase()} (${bottomMetrics.efficiency.toFixed(3)} assists/min)` },
+        { label: 'Tools Analyzed', value: toolMetrics.size }
+      ],
+      recommendations: [
+        { text: `Consider adopting ${topTool} best practices across the team`, actionType: 'process' },
+        { text: `Review ${bottomTool} configuration and usage patterns`, actionType: 'tooling' }
+      ],
+      source: 'productivity'
+    });
+  }
+  
+  return insights;
+};
+
+// Time-based trend analysis rule
+const ruleTimeBasedTrends: Rule = ({ engOutput, productivity }) => {
+  if (!productivity?.length) return [];
+  
+  const insights: PerformanceInsight[] = [];
+  
+  // Group by tool and analyze trends
+  const toolData = new Map<string, ToolProductivityPoint[]>();
+  productivity.forEach(p => {
+    if (p.tool) {
+      const arr = toolData.get(p.tool) || [];
+      arr.push(p);
+      toolData.set(p.tool, arr);
+    }
+  });
+  
+  for (const [tool, toolPoints] of toolData) {
+    if (toolPoints.length < 3) continue; // Need at least 3 points for trend analysis
+    
+    // Sort by period
+    const sortedPoints = toolPoints.sort((a, b) => a.period.localeCompare(b.period));
+    
+    const aiAssists = sortedPoints.map(p => p.aiAssists || 0);
+    const codingMinutes = sortedPoints.map(p => p.codingMinutes || 0);
+    
+    // Calculate trend (simple linear trend)
+    const aiTrend = aiAssists.length > 1 ? (aiAssists[aiAssists.length - 1] - aiAssists[0]) / aiAssists[0] : 0;
+    const codingTrend = codingMinutes.length > 1 ? (codingMinutes[codingMinutes.length - 1] - codingMinutes[0]) / codingMinutes[0] : 0;
+    
+    // Generate trend insights
+    if (Math.abs(aiTrend) > 0.3) { // 30% change
+      insights.push({
+        id: `ai-trend-${tool}-${Date.now()}`,
+        title: `AI Usage Trend in ${tool.toUpperCase()}`,
+        description: `${tool.toUpperCase()} shows ${aiTrend > 0 ? 'increasing' : 'decreasing'} AI usage trend (${(aiTrend * 100).toFixed(1)}% change over time).`,
+        severity: Math.abs(aiTrend) > 0.5 ? 'warning' : 'info',
+        tags: ['ai-trend', 'tool-performance', tool],
+        related: { tools: [tool] },
+        evidence: [
+          { label: 'Trend Direction', value: aiTrend > 0 ? 'Increasing' : 'Decreasing' },
+          { label: 'Trend Magnitude', value: `${(aiTrend * 100).toFixed(1)}%` },
+          { label: 'Data Points', value: toolPoints.length }
+        ],
+        recommendations: [
+          { text: `Monitor ${tool} AI usage patterns and adjust configuration if needed`, actionType: 'process' },
+          { text: `${aiTrend > 0 ? 'Consider' : 'Review'} ${tool} AI integration and effectiveness`, actionType: 'tooling' }
+        ],
+        source: 'productivity'
+      });
+    }
+    
+    if (Math.abs(codingTrend) > 0.3) { // 30% change
+      insights.push({
+        id: `coding-trend-${tool}-${Date.now()}`,
+        title: `Coding Time Trend in ${tool.toUpperCase()}`,
+        description: `${tool.toUpperCase()} shows ${codingTrend > 0 ? 'increasing' : 'decreasing'} coding time trend (${(codingTrend * 100).toFixed(1)}% change over time).`,
+        severity: Math.abs(codingTrend) > 0.5 ? 'warning' : 'info',
+        tags: ['coding-trend', 'tool-performance', tool],
+        related: { tools: [tool] },
+        evidence: [
+          { label: 'Trend Direction', value: codingTrend > 0 ? 'Increasing' : 'Decreasing' },
+          { label: 'Trend Magnitude', value: `${(codingTrend * 100).toFixed(1)}%` },
+          { label: 'Data Points', value: toolPoints.length }
+        ],
+        recommendations: [
+          { text: `${codingTrend > 0 ? 'Investigate' : 'Maintain'} ${tool} workflow efficiency`, actionType: 'process' },
+          { text: `Review ${tool} performance and configuration`, actionType: 'tooling' }
+        ],
+        source: 'productivity'
+      });
+    }
+  }
+  
+  return insights;
+};
+
+// Tool performance summary for engineering leaders - runs first
+const ruleToolPerformanceSummary: Rule = ({ engOutput, productivity }) => {
+  if (!productivity?.length) return [];
+  
+  const insights: PerformanceInsight[] = [];
+  
+  // Group productivity data by tool
+  const toolData = new Map<string, ToolProductivityPoint[]>();
+  productivity.forEach(p => {
+    if (p.tool) {
+      const arr = toolData.get(p.tool) || [];
+      arr.push(p);
+      toolData.set(p.tool, arr);
+    }
+  });
+  
+  if (toolData.size === 0) return [];
+  
+  // Calculate comprehensive metrics for each tool
+  const toolMetrics = Array.from(toolData.entries()).map(([tool, points]) => {
+    const aiAssists = points.map(p => p.aiAssists || 0);
+    const codingMinutes = points.map(p => p.codingMinutes || 0);
+    const totalAiAssists = aiAssists.reduce((a, b) => a + b, 0);
+    const totalCodingMinutes = codingMinutes.reduce((a, b) => a + b, 0);
+    const avgAiAssists = mean(aiAssists);
+    const avgCodingMinutes = mean(codingMinutes);
+    const efficiency = totalCodingMinutes > 0 ? totalAiAssists / totalCodingMinutes : 0;
+    const usageScore = totalAiAssists + (totalCodingMinutes / 10); // Combined usage score
+    
+    return { 
+      tool, 
+      totalAiAssists, 
+      totalCodingMinutes, 
+      avgAiAssists, 
+      avgCodingMinutes, 
+      efficiency, 
+      usageScore,
+      dataPoints: points.length
+    };
+  });
+  
+  // Sort by different metrics
+  const sortedByEfficiency = [...toolMetrics].sort((a, b) => b.efficiency - a.efficiency);
+  const sortedByUsage = [...toolMetrics].sort((a, b) => b.usageScore - a.usageScore);
+  const sortedByCodingTime = [...toolMetrics].sort((a, b) => b.totalCodingMinutes - a.totalCodingMinutes);
+  
+  // Generate comprehensive summary
+  const topPerformer = sortedByEfficiency[0];
+  const bottomPerformer = sortedByEfficiency[sortedByEfficiency.length - 1];
+  const mostUsed = sortedByUsage[0];
+  const leastUsed = sortedByUsage[sortedByUsage.length - 1];
+  
+  // Build leader-friendly description
+  const hasRealData = toolMetrics.length >= 3 && toolMetrics.some(t => t.totalCodingMinutes > 0);
+  const dataQualifier = !hasRealData 
+    ? ' (based on early data — trends will refine as more sessions are recorded)' 
+    : '';
+  
+  const mostUsedLabel = mostUsed.totalCodingMinutes > 0
+    ? `${formatNumber(mostUsed.totalAiAssists)} assists, ${formatTime(mostUsed.totalCodingMinutes)} active`
+    : `${formatNumber(mostUsed.totalAiAssists)} assists`;
+  
+  insights.push({
+    id: `tool-performance-summary-${Date.now()}`,
+    title: 'IDE Performance Snapshot',
+    description: `${topPerformer.tool.toUpperCase()} shows the highest AI assist activity, while ${mostUsed.tool.toUpperCase()} is the most actively used tool (${mostUsedLabel}). ${bottomPerformer.tool.toUpperCase()} shows minimal AI usage${dataQualifier}`,
+    severity: 'info',
+    tags: ['performance-summary', 'leadership', 'productivity'],
+    related: { tools: toolMetrics.map(t => t.tool) },
+    evidence: [
+      { label: 'Most AI-Active', value: topPerformer.tool.toUpperCase() },
+      { label: 'Most Used', value: `${mostUsed.tool.toUpperCase()} (${formatNumber(mostUsed.totalAiAssists)} assists)` },
+      { label: 'Least Active', value: bottomPerformer.tool.toUpperCase() },
+      { label: 'Tools Tracked', value: toolMetrics.length }
+    ],
+    recommendations: [
+      { text: `Share ${topPerformer.tool} AI workflows across the team`, actionType: 'process' },
+      { text: `Investigate why ${bottomPerformer.tool} shows low AI adoption`, actionType: 'process' }
+    ],
+    source: 'productivity',
+    metricId: 'ide.ai_efficiency'
+  });
+  
+  return insights;
+};
+
+// Comprehensive insights rule that generates multiple insights from any data
+const ruleComprehensiveInsights: Rule = ({ engOutput, productivity }) => {
+  const insights: PerformanceInsight[] = [];
+  
+  // 1. GitHub Performance Insights
+  if (engOutput?.length > 0) {
+    const cycleTimes = engOutput.map(e => e.prCycleTimeHours).filter(t => t > 0);
+    const mergeRates = engOutput.map(e => e.mergeRatePct).filter(r => r > 0);
+    const reviewTimes = engOutput.map(e => e.timeToFirstReviewHours).filter(t => t > 0);
+    const failureRates = engOutput.map(e => e.changeFailureRatePct).filter(f => f > 0);
+    
+    if (cycleTimes.length > 0) {
+      const avgCycleTime = mean(cycleTimes);
+      const maxCycleTime = Math.max(...cycleTimes);
+      const minCycleTime = Math.min(...cycleTimes);
+      
+      insights.push({
+        id: `cycle-time-analysis-${Date.now()}`,
+        title: 'PR Cycle Time Analysis',
+        description: `PR cycle times range from ${minCycleTime.toFixed(1)} to ${maxCycleTime.toFixed(1)} hours, with an average of ${avgCycleTime.toFixed(1)} hours.`,
+        severity: avgCycleTime > 48 ? 'critical' : avgCycleTime > 24 ? 'warning' : 'info',
+        tags: ['cycle-time', 'pr-performance'],
+        related: {},
+        evidence: [
+          { label: 'Average Cycle Time', value: avgCycleTime.toFixed(1) + ' hours' },
+          { label: 'Range', value: `${minCycleTime.toFixed(1)} - ${maxCycleTime.toFixed(1)} hours` },
+          { label: 'Data Points', value: cycleTimes.length }
+        ],
+        recommendations: [
+          { text: 'Implement automated PR checks to reduce manual review time', actionType: 'tooling' },
+          { text: 'Set up PR review reminders and escalation policies', actionType: 'process' }
+        ],
+        source: 'github'
+      });
+    }
+    
+    if (reviewTimes.length > 0) {
+      const avgReviewTime = mean(reviewTimes);
+      const maxReviewTime = Math.max(...reviewTimes);
+      
+      insights.push({
+        id: `review-time-analysis-${Date.now()}`,
+        title: 'Code Review Response Time',
+        description: `Average time to first review is ${avgReviewTime.toFixed(1)} hours, with maximum of ${maxReviewTime.toFixed(1)} hours.`,
+        severity: avgReviewTime > 12 ? 'critical' : avgReviewTime > 6 ? 'warning' : 'info',
+        tags: ['review-time', 'code-review'],
+        related: {},
+        evidence: [
+          { label: 'Average Review Time', value: avgReviewTime.toFixed(1) + ' hours' },
+          { label: 'Maximum Review Time', value: maxReviewTime.toFixed(1) + ' hours' },
+          { label: 'Data Points', value: reviewTimes.length }
+        ],
+        recommendations: [
+          { text: 'Implement review assignment rotation to distribute workload', actionType: 'process' },
+          { text: 'Set up automated notifications for pending reviews', actionType: 'tooling' }
+        ],
+        source: 'github'
+      });
+    }
+    
+    if (failureRates.length > 0) {
+      const avgFailureRate = mean(failureRates);
+      const maxFailureRate = Math.max(...failureRates);
+      
+      insights.push({
+        id: `failure-rate-analysis-${Date.now()}`,
+        title: 'Change Failure Rate Analysis',
+        description: `Average change failure rate is ${avgFailureRate.toFixed(1)}%, with maximum of ${maxFailureRate.toFixed(1)}%.`,
+        severity: avgFailureRate > 15 ? 'critical' : avgFailureRate > 10 ? 'warning' : 'info',
+        tags: ['failure-rate', 'quality'],
+        related: {},
+        evidence: [
+          { label: 'Average Failure Rate', value: avgFailureRate.toFixed(1) + '%' },
+          { label: 'Maximum Failure Rate', value: maxFailureRate.toFixed(1) + '%' },
+          { label: 'Data Points', value: failureRates.length }
+        ],
+        recommendations: [
+          { text: 'Implement pre-merge automated testing and quality gates', actionType: 'tooling' },
+          { text: 'Review and improve PR quality standards and guidelines', actionType: 'process' }
+        ],
+        source: 'github'
+      });
+    }
+  }
+  
+  // 2. Productivity Insights
+  if (productivity?.length > 0) {
+    // Group by tool
+    const toolData = new Map<string, ToolProductivityPoint[]>();
+    productivity.forEach(p => {
+      if (p.tool) {
+        const arr = toolData.get(p.tool) || [];
+        arr.push(p);
+        toolData.set(p.tool, arr);
+      }
+    });
+    
+    // Generate insights for each tool
+    for (const [tool, toolPoints] of toolData) {
+      if (toolPoints.length === 0) continue;
+      
+      const aiAssists = toolPoints.map(p => p.aiAssists || 0);
+      const codingMinutes = toolPoints.map(p => p.codingMinutes || 0);
+      
+      const totalAiAssists = aiAssists.reduce((a, b) => a + b, 0);
+      const totalCodingMinutes = codingMinutes.reduce((a, b) => a + b, 0);
+      const avgAiAssists = mean(aiAssists);
+      const avgCodingMinutes = mean(codingMinutes);
+      
+      // Tool usage insight
+      insights.push({
+        id: `tool-usage-${tool}-${Date.now()}`,
+        title: `${tool.toUpperCase()} Usage Analysis`,
+        description: `${tool.toUpperCase()} shows ${formatNumber(totalAiAssists)} total AI assists and ${formatTime(totalCodingMinutes)} total coding time across ${toolPoints.length} data points.`,
+        severity: totalAiAssists > 200 ? 'info' : totalAiAssists > 100 ? 'info' : 'info',
+        tags: ['tool-usage', 'productivity', tool],
+        related: { tools: [tool] },
+        evidence: [
+          { label: 'Total AI Assists', value: formatNumber(totalAiAssists) },
+          { label: 'Total Coding Time', value: formatTime(totalCodingMinutes) },
+          { label: 'Average AI Assists', value: avgAiAssists.toFixed(1) },
+          { label: 'Average Coding Time', value: formatTime(avgCodingMinutes) },
+          { label: 'Data Points', value: toolPoints.length }
+        ],
+        recommendations: getUniqueToolRecommendations(tool, 0, totalAiAssists, totalCodingMinutes),
+        source: 'productivity'
+      });
+      
+      // Tool efficiency insight
+      if (totalCodingMinutes > 0) {
+        const efficiency = totalAiAssists / totalCodingMinutes;
+        insights.push({
+          id: `tool-efficiency-${tool}-${Date.now()}`,
+          title: `${tool.toUpperCase()} AI Efficiency`,
+          description: `${tool.toUpperCase()} shows ${efficiency.toFixed(4)} AI assists per minute of coding time.`,
+          severity: efficiency > 0.5 ? 'info' : efficiency > 0.1 ? 'warning' : 'critical',
+          tags: ['ai-efficiency', 'tool-performance', tool],
+          related: { tools: [tool] },
+          evidence: [
+            { label: 'AI Efficiency', value: efficiency.toFixed(4) + ' assists/min' },
+            { label: 'Total AI Assists', value: formatNumber(totalAiAssists) },
+            { label: 'Total Coding Time', value: formatTime(totalCodingMinutes) }
+          ],
+          recommendations: getUniqueToolRecommendations(tool, efficiency, totalAiAssists, totalCodingMinutes),
+          source: 'productivity'
+        });
+      }
+    }
+    
+    // Cross-tool comparison
+    if (toolData.size >= 2) {
+      const toolMetrics = Array.from(toolData.entries()).map(([tool, points]) => {
+        const aiAssists = points.map(p => p.aiAssists || 0);
+        const codingMinutes = points.map(p => p.codingMinutes || 0);
+        const totalAiAssists = aiAssists.reduce((a, b) => a + b, 0);
+        const totalCodingMinutes = codingMinutes.reduce((a, b) => a + b, 0);
+        const efficiency = totalCodingMinutes > 0 ? totalAiAssists / totalCodingMinutes : 0;
+        return { tool, totalAiAssists, totalCodingMinutes, efficiency };
+      });
+      
+      const sortedByUsage = toolMetrics.sort((a, b) => b.totalAiAssists - a.totalAiAssists);
+      const sortedByEfficiency = toolMetrics.sort((a, b) => b.efficiency - a.efficiency);
+      
+      insights.push({
+        id: `tool-ranking-${Date.now()}`,
+        title: 'Tool Usage Ranking',
+        description: `Most used tool: ${sortedByUsage[0].tool.toUpperCase()} (${formatNumber(sortedByUsage[0].totalAiAssists)} AI assists), Most efficient: ${sortedByEfficiency[0].tool.toUpperCase()} (${sortedByEfficiency[0].efficiency.toFixed(4)} assists/min).`,
+        severity: 'info',
+        tags: ['tool-ranking', 'usage-analysis'],
+        related: { tools: toolMetrics.map(t => t.tool) },
+        evidence: [
+          { label: 'Most Used Tool', value: `${sortedByUsage[0].tool.toUpperCase()} (${formatNumber(sortedByUsage[0].totalAiAssists)} assists)` },
+          { label: 'Most Efficient Tool', value: `${sortedByEfficiency[0].tool.toUpperCase()} (${sortedByEfficiency[0].efficiency.toFixed(4)} assists/min)` },
+          { label: 'Tools Analyzed', value: toolMetrics.length }
+        ],
+        recommendations: [
+          { text: `Consider adopting ${sortedByEfficiency[0].tool} best practices across the team`, actionType: 'process' },
+          { text: `Review ${sortedByUsage[0].tool} configuration for optimal performance`, actionType: 'tooling' }
+        ],
+        source: 'productivity'
+      });
+    }
+  }
+  
+  return insights;
+};
+
+// Fallback rule to ensure we always have some insights
+const ruleFallbackInsights: Rule = ({ engOutput, productivity }) => {
+  const insights: PerformanceInsight[] = [];
+  
+  // If we have any data at all, generate basic insights
+  if (engOutput?.length > 0) {
+    const avgCycleTime = engOutput.reduce((sum, e) => sum + (e.prCycleTimeHours || 0), 0) / engOutput.length;
+    insights.push({
+      id: 'fallback-cycle-time',
+      title: 'Average Cycle Time',
+      description: `Average PR cycle time is ${avgCycleTime.toFixed(1)} hours across ${engOutput.length} periods.`,
+      severity: 'info',
+      tags: ['fallback', 'cycle-time'],
+      related: {},
+      evidence: [
+        { label: 'Average Cycle Time', value: `${avgCycleTime.toFixed(1)} hours` },
+        { label: 'Data Points', value: engOutput.length }
+      ],
+      recommendations: [
+        { text: 'Monitor cycle time trends over time', actionType: 'process' }
+      ],
+      source: 'github'
+    });
+  }
+  
+  if (productivity?.length > 0) {
+    const totalAssists = productivity.reduce((sum, p) => sum + (p.aiAssists || 0), 0);
+    const avgAssists = totalAssists / productivity.length;
+    insights.push({
+      id: 'fallback-ai-usage',
+      title: 'AI Usage Overview',
+      description: `Average AI assists per period: ${avgAssists.toFixed(1)} across ${productivity.length} periods.`,
+      severity: 'info',
+      tags: ['fallback', 'ai-usage'],
+      related: {},
+      evidence: [
+        { label: 'Average AI Assists', value: `${avgAssists.toFixed(1)} per period` },
+        { label: 'Total Assists', value: totalAssists },
+        { label: 'Data Points', value: productivity.length }
+      ],
+      recommendations: [
+        { text: 'Track AI usage patterns and effectiveness', actionType: 'process' }
+      ],
+      source: 'productivity'
+    });
+  }
+  
+  // Only show cross-dataset insight if there's a coverage gap or specific issue
+  // (Removed generic "data available" message - user can see data in cards)
+  
+  const hasGHData = engOutput && engOutput.length > 0;
+  const hasProdData = productivity && productivity.length > 0;
+  
+  // Safely calculate overlap, handling potential errors
+  let overlap = 0;
+  if (hasGHData && hasProdData) {
+    try {
+      overlap = overlapCount(engOutput, productivity);
+    } catch (e) {
+      console.warn('[ruleFallbackInsights] overlapCount error:', e);
+      overlap = 0;
+    }
+  }
+  
+  // Only emit if there's a specific coverage concern
+  if (hasGHData && !hasProdData) {
+    insights.push({
+      id: 'fallback-coverage-gap',
+      title: 'Missing IDE Productivity Data',
+      description: `GitHub metrics are available, but no IDE productivity data found. Connect your IDE to unlock AI usage insights.`,
+      severity: 'warning',
+      tags: ['fallback', 'coverage-gap'],
+      related: {},
+      evidence: [
+        { label: 'GitHub PRs', value: engOutput.length },
+        { label: 'IDE Sessions', value: 0 }
+      ],
+      recommendations: [
+        { text: 'Install the ChaosMonkey VS Code/Cursor extension', actionType: 'tooling' }
+      ],
+      source: 'mixed'
+    });
+  } else if (!hasGHData && hasProdData) {
+    insights.push({
+      id: 'fallback-coverage-gap',
+      title: 'Missing GitHub Data',
+      description: `IDE productivity data is available, but no GitHub metrics found. Connect GitHub to unlock PR cycle time insights.`,
+      severity: 'warning',
+      tags: ['fallback', 'coverage-gap'],
+      related: {},
+      evidence: [
+        { label: 'GitHub PRs', value: 0 },
+        { label: 'IDE Sessions', value: productivity.length }
+      ],
+      recommendations: [
+        { text: 'Authorize GitHub OAuth to sync pull request data', actionType: 'tooling' }
+      ],
+      source: 'mixed'
+    });
+  }
+  // If both exist but no overlap, insights are already generated by cycle-vs-ai rules
+  // No need for generic "data available" message
+  
+  return insights;
+};
+
+// ========== NEW ENGINEERING LEADERSHIP RULES (10 Total) ==========
+
+/**
+ * RULE 1: AI Usage Improves Cycle Time
+ * Detects when higher AI adoption correlates with faster PR cycle times
+ * 
+ * Required fields:
+ * - EngOutputPoint: prCycleTimeHours, period
+ * - ToolProductivityPoint: aiAssists, period, tool, codingMinutes (optional)
+ */
+const ruleAIImprovesCycleTime: Rule = ({ engOutput, productivity, overlap, prodGlobalSource }) => {
+  const insights: PerformanceInsight[] = [];
+  
+  // In PROD mode: skip if pure simulation
+  // In DEMO mode: allow sim data (prefer live if available)
+  if (!DEMO_MODE && prodGlobalSource === 'prod-sim') {
+    if (import.meta.env.DEV) {
+      console.debug('[PI_RULE_SKIP] ai-improves-ct: prod-sim in PROD mode');
+    }
+    return [];
+  }
+  
+  // Prefer live/hybrid points, but in DEMO_MODE use all points if needed
+  const relevantProd = DEMO_MODE 
+    ? productivity || []
+    : (productivity?.filter((p: any) => p.source === 'live' || p.source === 'hybrid') || []);
+  
+  console.warn('[RULE_DATA_CHECK] ai-improves-ct', {
+    DEMO_MODE,
+    totalProd: productivity?.length,
+    relevantProd: relevantProd.length,
+    prodGlobalSource,
+    overlap,
+    engOutput: engOutput?.length,
+  })
+  
+  const minOverlap = DEMO_MODE ? 2 : 3;
+  
+  if (!engOutput?.length || relevantProd.length === 0 || (overlap ?? 0) < minOverlap) {
+    if (import.meta.env.DEV) {
+      console.debug('[PI_RULE_SKIP] ai-improves-ct: insufficient data', { 
+        overlap, 
+        minOverlap,
+        ghLen: engOutput?.length, 
+        totalProdLen: productivity?.length,
+        relevantProdLen: relevantProd.length,
+        prodGlobalSource,
+        demoMode: DEMO_MODE
+      });
+    }
+    return [];
+  }
+  
+  try {
+    // Calculate AI usage per period (use volume if codingMinutes unavailable)
+    const toolData = new Map<string, { aiUsage: number[], cycleTime: number[], periods: string[] }>();
+    
+    for (const prod of relevantProd) {
+      if (!prod.tool || !prod.period) continue;
+      
+      // Use assists per minute if available, else use total assists as proxy
+      const aiUsage = prod.codingMinutes && prod.codingMinutes > 0
+        ? (prod.aiAssists || 0) / prod.codingMinutes
+        : (prod.aiAssists || 0);
+      
+      const ghPoint = engOutput.find(g => g.period === prod.period);
+      
+      if (ghPoint && ghPoint.prCycleTimeHours != null && aiUsage > 0) {
+        if (!toolData.has(prod.tool)) {
+          toolData.set(prod.tool, { aiUsage: [], cycleTime: [], periods: [] });
+        }
+        const data = toolData.get(prod.tool)!;
+        data.aiUsage.push(aiUsage);
+        data.cycleTime.push(ghPoint.prCycleTimeHours);
+        data.periods.push(prod.period);
+      }
+    }
+    
+    if (import.meta.env.DEV) {
+      console.debug('[RULE_AI_IMPROVES_CT] toolData size:', toolData.size, 'tools:', Array.from(toolData.keys()));
+    }
+    
+    const minPoints = DEMO_MODE ? DEMO_MIN_POINTS : 4;
+    const minAbsR = DEMO_MODE ? DEMO_MIN_ABS_R : 0.55;
+    
+    for (const [tool, data] of toolData) {
+      if (data.aiUsage.length < minPoints) {
+        if (import.meta.env.DEV) {
+          console.debug(`[RULE_AI_IMPROVES_CT] Skip ${tool}: only ${data.aiUsage.length} periods (need ${minPoints})`);
+        }
+        continue;
+      }
+      
+      const r = pearson(data.aiUsage, data.cycleTime);
+      const p = pValueFromR(r, data.aiUsage.length);
+      
+      if (import.meta.env.DEV) {
+        console.debug(`[RULE_AI_IMPROVES_CT] ${tool}:`, { r: r.toFixed(3), p: p.toFixed(4), periods: data.aiUsage.length, minAbsR });
+      }
+      
+      // Negative correlation = more AI, less cycle time (good!)
+      if (r < -minAbsR && p < SIG_P) {
+        const slopeHours = Math.abs(r * mean(data.cycleTime));
+        const speedupPct = (slopeHours / mean(data.cycleTime)) * 100;
+        
+        insights.push({
+          id: `ai-improves-ct-${tool}-${Date.now()}`,
+          title: `${tool.toUpperCase()}: AI usage correlates with ~${speedupPct.toFixed(0)}% faster PR cycle time`,
+          description: `Higher AI activity in ${tool} correlates with shorter PR cycle times (r=${r.toFixed(2)}, p=${p.toFixed(3)}). Estimated speedup: ${slopeHours.toFixed(1)}h per PR.`,
+          severity: 'highlight',
+          cicdStage: 'review-merge',
+          tags: ['ai-impact', 'cycle-time', 'positive', tool],
+          related: { tools: [tool] },
+          evidence: [
+            { label: 'IDE', value: tool.toUpperCase() },
+            { label: 'Correlation', value: r.toFixed(3) },
+            { label: 'Statistical Confidence', value: `${((1 - p) * 100).toFixed(1)}%` },
+            { label: 'Data Points', value: data.periods.length },
+            { label: 'Est. Impact', value: `~${speedupPct.toFixed(0)}% faster` }
+          ],
+          recommendations: [
+            { text: `Share ${tool} AI workflow patterns with the team`, actionType: 'process' },
+            { text: 'Document successful AI-assisted development practices', actionType: 'process' }
+          ],
+          source: 'combined',
+          metricId: 'eng.pr_cycle_time'
+        });
+        
+        if (import.meta.env.DEV) {
+          console.debug(`[RULE_AI_IMPROVES_CT] ✅ Fired for ${tool}`);
+        }
+      }
+    }
+    
+    if (import.meta.env.DEV) {
+      console.debug('[RULE_AI_IMPROVES_CT] Generated insights:', insights.length);
+    }
+  } catch (e) {
+    console.warn('[RULE_AI_IMPROVES_CT] Error:', e);
+  }
+  
+  return insights;
+};
+
+/**
+ * RULE 2: AI Usage Slows Cycle Time (Regression Alert)
+ * Detects when higher AI usage correlates with SLOWER cycle times
+ * 
+ * Required fields:
+ * - EngOutputPoint: prCycleTimeHours, period
+ * - ToolProductivityPoint: aiAssists, period, tool, codingMinutes (optional)
+ */
+const ruleAISlowsCycleTime: Rule = ({ engOutput, productivity, overlap, prodGlobalSource }) => {
+  const insights: PerformanceInsight[] = [];
+  
+  // In DEMO mode: allow sim data
+  if (!DEMO_MODE && prodGlobalSource === 'prod-sim') {
+  
+  console.warn('[RULE_DATA_CHECK] ai-slows-ct', {
+    DEMO_MODE,
+    totalProd: productivity?.length,
+    relevantProd: relevantProd.length,
+    prodGlobalSource,
+    overlap,
+    engOutput: engOutput?.length,
+  })
+    if (import.meta.env.DEV) {
+      console.debug('[PI_RULE_SKIP] ai-slows-ct: prod-sim in PROD mode');
+    }
+    return [];
+  }
+  
+  const relevantProd = DEMO_MODE 
+    ? productivity || []
+    : (productivity?.filter((p: any) => p.source === 'live' || p.source === 'hybrid') || []);
+  
+  const minOverlap = DEMO_MODE ? 2 : 3;
+  
+  if (!engOutput?.length || relevantProd.length === 0 || (overlap ?? 0) < minOverlap) {
+    if (import.meta.env.DEV) {
+      console.debug('[PI_RULE_SKIP] ai-slows-ct: insufficient data', { 
+        overlap, 
+        minOverlap,
+        relevantProdLen: relevantProd.length,
+        prodGlobalSource,
+        demoMode: DEMO_MODE
+      });
+    }
+    return [];
+  }
+  
+  try {
+    const toolData = new Map<string, { aiUsage: number[], cycleTime: number[], periods: string[] }>();
+    
+    for (const prod of productivity) {
+      if (!prod.tool || !prod.period) continue;
+      
+      // Use assists per minute if available, else use total assists as proxy
+      const aiUsage = prod.codingMinutes && prod.codingMinutes > 0
+        ? (prod.aiAssists || 0) / prod.codingMinutes
+        : (prod.aiAssists || 0);
+      
+      const ghPoint = engOutput.find(g => g.period === prod.period);
+      
+      if (ghPoint && ghPoint.prCycleTimeHours != null && aiUsage > 0) {
+        if (!toolData.has(prod.tool)) {
+          toolData.set(prod.tool, { aiUsage: [], cycleTime: [], periods: [] });
+        }
+        const data = toolData.get(prod.tool)!;
+        data.aiUsage.push(aiUsage);
+        data.cycleTime.push(ghPoint.prCycleTimeHours);
+        data.periods.push(prod.period);
+      }
+    }
+    
+    if (import.meta.env.DEV) {
+      console.debug('[RULE_AI_SLOWS_CT] toolData size:', toolData.size);
+    }
+    
+    const minPoints = DEMO_MODE ? DEMO_MIN_POINTS : 4;
+    const minAbsR = DEMO_MODE ? DEMO_MIN_ABS_R : 0.55;
+    
+    for (const [tool, data] of toolData) {
+      if (data.aiUsage.length < minPoints) {
+        if (import.meta.env.DEV) {
+          console.debug(`[RULE_AI_SLOWS_CT] Skip ${tool}: only ${data.aiUsage.length} periods`);
+        }
+        continue;
+      }
+      
+      const r = pearson(data.aiUsage, data.cycleTime);
+      const p = pValueFromR(r, data.aiUsage.length);
+      
+      if (import.meta.env.DEV) {
+        console.debug(`[RULE_AI_SLOWS_CT] ${tool}:`, { r: r.toFixed(3), p: p.toFixed(4), periods: data.aiUsage.length });
+      }
+      
+      // Positive correlation = more AI, MORE cycle time (bad!)
+      if (r > minAbsR && p < SIG_P) {
+        const slopeHours = r * mean(data.cycleTime);
+        const slowdownPct = (slopeHours / mean(data.cycleTime)) * 100;
+        
+        insights.push({
+          id: `ai-slows-ct-${tool}-${Date.now()}`,
+          title: `${tool.toUpperCase()}: Heavy AI usage may be slowing PR throughput`,
+          description: `Higher AI activity in ${tool} correlates with longer PR cycle times (r=${r.toFixed(2)}, p=${p.toFixed(3)}). This may indicate over-reliance on generated code or insufficient review.`,
+          severity: 'risk',
+          cicdStage: 'review-merge',
+          tags: ['ai-impact', 'cycle-time', 'negative', 'regression', tool],
+          related: { tools: [tool] },
+          evidence: [
+            { label: 'IDE', value: tool.toUpperCase() },
+            { label: 'Correlation', value: r.toFixed(3) },
+            { label: 'Statistical Confidence', value: `${((1 - p) * 100).toFixed(1)}%` },
+            { label: 'Data Points', value: data.periods.length },
+            { label: 'Est. Impact', value: `~${slowdownPct.toFixed(0)}% slower` }
+          ],
+          recommendations: [
+            { text: `Review ${tool} PRs with heavy AI usage for quality issues`, actionType: 'process' },
+            { text: 'Provide training on effective AI code review practices', actionType: 'process' }
+          ],
+          source: 'combined',
+          metricId: 'eng.pr_cycle_time'
+        });
+        
+        if (import.meta.env.DEV) {
+          console.debug(`[RULE_AI_SLOWS_CT] ✅ Fired for ${tool}`);
+        }
+      }
+    }
+    
+    if (import.meta.env.DEV) {
+      console.debug('[RULE_AI_SLOWS_CT] Generated insights:', insights.length);
+    }
+  } catch (e) {
+    console.warn('[RULE_AI_SLOWS_CT] Error:', e);
+  }
+  
+  return insights;
+};
+
+/**
+ * RULE 3: AI Usage Impacts Reopen Rate (Quality)
+ * Detects correlation between AI usage and PR reopen rate
+ * 
+ * Required fields:
+ * - EngOutputPoint: changeFailureRatePct (or reopenRatePct), period
+ * - ToolProductivityPoint: aiAssists, period, tool
+ */
+const ruleAIImpactsReopenRate: Rule = ({ engOutput, productivity, overlap }) => {
+  const insights: PerformanceInsight[] = [];
+  
+  const minOverlap = DEMO_MODE ? 2 : 3;
+  
+  if (!engOutput?.length || !productivity?.length || (overlap ?? 0) < minOverlap) {
+    if (import.meta.env.DEV) {
+      console.debug('[PI_RULE_SKIP] ai-reopen-rate: insufficient overlap', { overlap, minOverlap });
+    }
+    return [];
+  }
+  
+  try {
+    const toolData = new Map<string, { aiUsage: number[], reopenRate: number[], periods: string[] }>();
+    
+    for (const prod of productivity) {
+      if (!prod.tool || !prod.period) continue;
+      
+      const aiUsage = (prod.aiAssists || 0) / Math.max(prod.codingMinutes || 1, 1);
+      const ghPoint = engOutput.find(g => g.period === prod.period);
+      
+      // Note: reopenRate might not exist in current schema, this is aspirational
+      const reopenRate = (ghPoint as any)?.reopenRatePct || (ghPoint as any)?.changeFailureRatePct;
+      
+      if (ghPoint && reopenRate != null) {
+        if (!toolData.has(prod.tool)) {
+          toolData.set(prod.tool, { aiUsage: [], reopenRate: [], periods: [] });
+        }
+        const data = toolData.get(prod.tool)!;
+        data.aiUsage.push(aiUsage);
+        data.reopenRate.push(reopenRate);
+        data.periods.push(prod.period);
+      }
+    }
+    
+    const minPoints = DEMO_MODE ? DEMO_MIN_POINTS : 4;
+    const minAbsR = DEMO_MODE ? 0.3 : 0.5;
+    
+    for (const [tool, data] of toolData) {
+      if (data.aiUsage.length < minPoints) continue;
+      
+      const r = pearson(data.aiUsage, data.reopenRate);
+      const p = pValueFromR(r, data.aiUsage.length);
+      
+      if (Math.abs(r) > minAbsR && p < SIG_P) {
+        const lowRate = Math.min(...data.reopenRate);
+        const highRate = Math.max(...data.reopenRate);
+        
+        insights.push({
+          id: `ai-reopen-${tool}-${Date.now()}`,
+          title: `Heavy AI usage is linked to ${r > 0 ? 'higher' : 'lower'} PR reopen rate (${tool})`,
+          description: `Reopen rate ${r > 0 ? 'rises' : 'falls'} from ${lowRate.toFixed(1)}% → ${highRate.toFixed(1)}% when AI usage ${r > 0 ? 'increases' : 'decreases'}. This ${r > 0 ? 'indicates quality regressions' : 'suggests quality improvements'}.`,
+          severity: r > 0 ? 'warning' : 'highlight',
+          tags: ['ai-impact', 'quality', 'reopen-rate', tool],
+          related: { tools: [tool] },
+          evidence: [
+            { label: 'Correlation (r)', value: r.toFixed(3) },
+            { label: 'Significance (p)', value: p.toFixed(4) },
+            { label: 'Reopen Range', value: `${lowRate.toFixed(1)}% - ${highRate.toFixed(1)}%` },
+            { label: 'Periods', value: data.periods.length }
+          ],
+          recommendations: r > 0 ? [
+            { text: `Introduce lightweight pre-PR testing when many AI assists are used in ${tool}`, actionType: 'process' },
+            { text: 'Require code reasoning summaries for AI-heavy changes', actionType: 'process' }
+          ] : [
+            { text: `Document successful ${tool} AI patterns that improve quality`, actionType: 'process' }
+          ],
+          source: 'combined',
+          metricId: 'eng.change_failure_rate'
+        });
+      }
+    }
+  } catch (e) {
+    console.warn('[RULE_AI_REOPEN] Error:', e);
+  }
+  
+  return insights;
+};
+
+/**
+ * RULE 4: Team AI Adoption vs Throughput
+ * Compares teams by AI usage and output
+ */
+const ruleTeamAIAdoptionVsThroughput: Rule = ({ engOutput, productivity, overlap }) => {
+  const insights: PerformanceInsight[] = [];
+  
+  if (!engOutput?.length || !productivity?.length || (overlap ?? 0) < 2) {
+    if (import.meta.env.DEV) {
+      console.debug('[RULE_TEAM_AI] Skip: insufficient data');
+    }
+    return [];
+  }
+  
+  try {
+    // Group by team (if available) or fall back to tool-level comparison
+    const teamData = new Map<string, { aiUsage: number, prsPerDev: number, totalPRs: number }>();
+    
+    for (const prod of productivity) {
+      const teamKey = (prod as any).team || prod.tool || 'default';
+      if (!teamData.has(teamKey)) {
+        teamData.set(teamKey, { aiUsage: 0, prsPerDev: 0, totalPRs: 0 });
+      }
+      const data = teamData.get(teamKey)!;
+      data.aiUsage += prod.aiAssists || 0;
+      
+      // Find matching GH data
+      const ghPoint = engOutput.find(g => g.period === prod.period);
+      if (ghPoint) {
+        data.totalPRs += (ghPoint as any).prsMerged || 0;
+        data.prsPerDev = data.totalPRs; // Simplified - would need dev count
+      }
+    }
+    
+    if (teamData.size < 2) return []; // Need at least 2 teams to compare
+    
+    const teams = Array.from(teamData.entries())
+      .map(([team, data]) => ({ team, ...data }))
+      .sort((a, b) => b.aiUsage - a.aiUsage);
+    
+    const topTeam = teams[0];
+    const bottomTeam = teams[teams.length - 1];
+    
+    const aiVariance = (topTeam.aiUsage - bottomTeam.aiUsage) / Math.max(bottomTeam.aiUsage, 1);
+    const throughputVariance = (topTeam.prsPerDev - bottomTeam.prsPerDev) / Math.max(bottomTeam.prsPerDev, 1);
+    
+    if (aiVariance > 0.25 && throughputVariance > 0.15) {
+      insights.push({
+        id: `team-ai-throughput-${Date.now()}`,
+        title: 'High-AI teams deliver significantly more output',
+        description: `Teams with higher AI usage ship ${(throughputVariance * 100).toFixed(0)}% more merged PRs. ${topTeam.team} (high AI) outperforms ${bottomTeam.team} (low AI).`,
+        severity: 'opportunity',
+        tags: ['team-performance', 'ai-adoption', 'throughput'],
+        related: { tools: [topTeam.team, bottomTeam.team] },
+        evidence: [
+          { label: 'Top Team', value: topTeam.team },
+          { label: 'Top Team AI Usage', value: topTeam.aiUsage.toFixed(0) },
+          { label: 'Bottom Team', value: bottomTeam.team },
+          { label: 'Bottom Team AI Usage', value: bottomTeam.aiUsage.toFixed(0) },
+          { label: 'Throughput Delta', value: `${(throughputVariance * 100).toFixed(0)}%` }
+        ],
+        recommendations: [
+          { text: `Provide targeted onboarding for ${bottomTeam.team} team on AI tools`, actionType: 'process' },
+          { text: `Organize knowledge sharing session with ${topTeam.team}`, actionType: 'process' }
+        ],
+        source: 'combined',
+        metricId: 'prod.output_per_developer'
+      });
+    }
+  } catch (e) {
+    console.warn('[RULE_TEAM_AI] Error:', e);
+  }
+  
+  return insights;
+};
+
+/**
+ * RULE 5: Review Bottleneck Detection
+ * Detects when review wait time is the primary bottleneck
+ * 
+ * Required fields:
+ * - EngOutputPoint: timeToFirstReviewHours, prCycleTimeHours, period
+ * - ToolProductivityPoint: (not required)
+ */
+const ruleReviewBottleneck: Rule = ({ engOutput, productivity, overlap }) => {
+  const insights: PerformanceInsight[] = [];
+  
+  // Don't need productivity data - this is pure GitHub analysis
+  if (!engOutput?.length || engOutput.length < 2) {
+    if (import.meta.env.DEV) {
+      console.debug('[PI_RULE_SKIP] review-bottleneck: insufficient GH data', { ghLen: engOutput?.length });
+    }
+    return [];
+  }
+  
+  try {
+    let totalReviewWait = 0;
+    let totalCycleTime = 0;
+    let count = 0;
+    
+    for (const gh of engOutput) {
+      if (gh.timeToFirstReviewHours != null && gh.prCycleTimeHours != null) {
+        totalReviewWait += gh.timeToFirstReviewHours;
+        totalCycleTime += gh.prCycleTimeHours;
+        count++;
+      }
+    }
+    
+    if (count < 2) {
+      if (import.meta.env.DEV) {
+        console.debug('[RULE_REVIEW_BOTTLENECK] Skip: not enough data points with review times', { count });
+      }
+      return [];
+    }
+    
+    const avgReviewWait = totalReviewWait / count;
+    const avgCycleTime = totalCycleTime / count;
+    const reviewPercentage = (avgReviewWait / avgCycleTime) * 100;
+    
+    if (import.meta.env.DEV) {
+      console.debug('[RULE_REVIEW_BOTTLENECK] Calculated:', { 
+        avgReviewWait: avgReviewWait.toFixed(1), 
+        avgCycleTime: avgCycleTime.toFixed(1),
+        reviewPercentage: reviewPercentage.toFixed(0),
+        count 
+      });
+    }
+    
+    // Lowered threshold: 40% instead of 50%
+    if (reviewPercentage > 40) {
+      insights.push({
+        id: `review-bottleneck-${Date.now()}`,
+        title: `Review delays account for ${reviewPercentage.toFixed(0)}% of PR cycle time`,
+        description: `On average, ${avgReviewWait.toFixed(1)} hours of ${avgCycleTime.toFixed(1)} hour total cycle time is spent waiting for first review. This is the primary bottleneck slowing PR throughput.`,
+        severity: reviewPercentage > 60 ? 'risk' : 'warning',
+        cicdStage: 'review-merge',
+        tags: ['review-bottleneck', 'cycle-time', 'process'],
+        related: {},
+        evidence: [
+          { label: 'Review Wait', value: `${reviewPercentage.toFixed(0)}% of cycle time` },
+          { label: 'Avg Wait Time', value: `${avgReviewWait.toFixed(1)}h` },
+          { label: 'Avg Cycle Time', value: `${avgCycleTime.toFixed(1)}h` },
+          { label: 'PRs Analyzed', value: count }
+        ],
+        recommendations: [
+          { text: 'Set review SLA: first review within 4 hours', actionType: 'process' },
+          { text: 'Enable automated review reminders', actionType: 'tooling' },
+          { text: 'Balance reviewer assignments across team', actionType: 'process' }
+        ],
+        source: 'github',
+        metricId: 'eng.time_to_first_review'
+      });
+      
+      if (import.meta.env.DEV) {
+        console.debug('[RULE_REVIEW_BOTTLENECK] ✅ Fired:', { reviewPercentage: reviewPercentage.toFixed(0), severity: reviewPercentage > 60 ? 'risk' : 'warning' });
+      }
+    } else {
+      if (import.meta.env.DEV) {
+        console.debug('[RULE_REVIEW_BOTTLENECK] Not firing: reviewPercentage =', reviewPercentage.toFixed(0), '(threshold: 40%)');
+      }
+    }
+    
+    if (import.meta.env.DEV) {
+      console.debug('[RULE_REVIEW_BOTTLENECK] Generated insights:', insights.length);
+    }
+  } catch (e) {
+    console.warn('[RULE_REVIEW_BOTTLENECK] Error:', e);
+  }
+  
+  return insights;
+};
+
+/**
+ * RULE 6: Coding Time vs Output (Workload / Burnout)
+ * Detects mismatches between coding time and output
+ */
+const ruleCodingTimeVsOutput: Rule = ({ engOutput, productivity, overlap }) => {
+  const insights: PerformanceInsight[] = [];
+  
+  if (!engOutput?.length || !productivity?.length || (overlap ?? 0) < 2) {
+    if (import.meta.env.DEV) {
+      console.debug('[RULE_CODING_VS_OUTPUT] Skip: insufficient overlap');
+    }
+    return [];
+  }
+  
+  try {
+    const toolData = new Map<string, { codingMinutes: number, prs: number }>();
+    
+    for (const prod of productivity) {
+      if (!prod.tool || !prod.codingMinutes) continue;
+      
+      if (!toolData.has(prod.tool)) {
+        toolData.set(prod.tool, { codingMinutes: 0, prs: 0 });
+      }
+      const data = toolData.get(prod.tool)!;
+      data.codingMinutes += prod.codingMinutes;
+      
+      const ghPoint = engOutput.find(g => g.period === prod.period);
+      if (ghPoint) {
+        data.prs += ((ghPoint as any).prsMerged || (ghPoint as any).prsOpened || 0);
+      }
+    }
+    
+    const tools = Array.from(toolData.entries())
+      .map(([tool, data]) => ({
+        tool,
+        ...data,
+        efficiency: data.prs / Math.max(data.codingMinutes / 60, 1) // PRs per hour
+      }))
+      .filter(t => t.codingMinutes > 0);
+    
+    if (tools.length < 2) return [];
+    
+    const avgEfficiency = mean(tools.map(t => t.efficiency));
+    
+    for (const tool of tools) {
+      const ratio = tool.efficiency / avgEfficiency;
+      
+      // High coding time but low output (2x below average)
+      if (ratio < 0.5) {
+        insights.push({
+          id: `overload-${tool.tool}-${Date.now()}`,
+          title: `Possible developer overload detected (${tool.tool})`,
+          description: `${tool.tool} users show high coding time (${(tool.codingMinutes / 60).toFixed(1)}h) but ${((1 - ratio) * 100).toFixed(0)}% lower output than average. May indicate complexity, blockers, or burnout.`,
+          severity: 'risk',
+          tags: ['workload', 'burnout', 'efficiency', tool.tool],
+          related: { tools: [tool.tool] },
+          evidence: [
+            { label: 'Coding Hours', value: (tool.codingMinutes / 60).toFixed(1) },
+            { label: 'PRs Delivered', value: tool.prs },
+            { label: 'Efficiency vs Avg', value: `${(ratio * 100).toFixed(0)}%` }
+          ],
+          recommendations: [
+            { text: `Review PR ownership and complexity distribution for ${tool.tool} users`, actionType: 'process' },
+            { text: 'Check for blockers or technical debt impacting productivity', actionType: 'process' }
+          ],
+          source: 'combined',
+          metricId: 'prod.coding_efficiency'
+        });
+      }
+      
+      // Low coding time but high output (2x above average)
+      if (ratio > 2) {
+        insights.push({
+          id: `underutilized-${tool.tool}-${Date.now()}`,
+          title: `Underutilized developer capacity (${tool.tool})`,
+          description: `${tool.tool} users show low coding time (${(tool.codingMinutes / 60).toFixed(1)}h) but ${((ratio - 1) * 100).toFixed(0)}% higher output than average. May indicate available capacity.`,
+          severity: 'opportunity',
+          tags: ['capacity', 'efficiency', tool.tool],
+          related: { tools: [tool.tool] },
+          evidence: [
+            { label: 'Coding Hours', value: (tool.codingMinutes / 60).toFixed(1) },
+            { label: 'PRs Delivered', value: tool.prs },
+            { label: 'Efficiency vs Avg', value: `${(ratio * 100).toFixed(0)}%` }
+          ],
+          recommendations: [
+            { text: `Consider increasing workload or complexity for ${tool.tool} users`, actionType: 'process' },
+            { text: 'Leverage their capacity for mentoring or complex tasks', actionType: 'process' }
+          ],
+          source: 'combined',
+          metricId: 'prod.coding_efficiency'
+        });
+      }
+    }
+  } catch (e) {
+    console.warn('[RULE_CODING_VS_OUTPUT] Error:', e);
+  }
+  
+  return insights;
+};
+
+/**
+ * RULE 7: High-Risk Area of Code Detected
+ * Identifies repos/areas with high failure/reopen rates
+ */
+const ruleHighRiskArea: Rule = ({ engOutput, productivity, overlap }) => {
+  const insights: PerformanceInsight[] = [];
+  
+  if (!engOutput?.length || (overlap ?? 0) < 2) {
+    if (import.meta.env.DEV) {
+      console.debug('[RULE_HIGH_RISK] Skip: insufficient GH data');
+    }
+    return [];
+  }
+  
+  try {
+    const repoData = new Map<string, { failureRate: number, cycleTime: number, count: number }>();
+    
+    for (const gh of engOutput) {
+      const repo = (gh as any).repo || 'default';
+      if (!repoData.has(repo)) {
+        repoData.set(repo, { failureRate: 0, cycleTime: 0, count: 0 });
+      }
+      const data = repoData.get(repo)!;
+      data.failureRate += (gh.changeFailureRatePct || 0);
+      data.cycleTime += (gh.prCycleTimeHours || 0);
+      data.count++;
+    }
+    
+    const repos = Array.from(repoData.entries())
+      .map(([repo, data]) => ({
+        repo,
+        avgFailureRate: data.failureRate / data.count,
+        avgCycleTime: data.cycleTime / data.count,
+        count: data.count
+      }));
+    
+    if (repos.length < 2) return [];
+    
+    const orgAvgFailure = mean(repos.map(r => r.avgFailureRate));
+    const orgAvgCycle = mean(repos.map(r => r.avgCycleTime));
+    
+    for (const repo of repos) {
+      // High risk if failure rate is 2x org average
+      if (repo.avgFailureRate > orgAvgFailure * 2 && repo.avgFailureRate > 5) {
+        insights.push({
+          id: `high-risk-${repo.repo}-${Date.now()}`,
+          title: `Risk concentration in ${repo.repo}`,
+          description: `${repo.repo} shows ${repo.avgFailureRate.toFixed(1)}% failure rate (${((repo.avgFailureRate / orgAvgFailure) - 1) * 100}% higher than org average). This indicates a high-risk area requiring attention.`,
+          severity: 'critical',
+          tags: ['risk', 'quality', 'hotspot', repo.repo],
+          related: { repos: [repo.repo] },
+          evidence: [
+            { label: 'Repo', value: repo.repo },
+            { label: 'Failure Rate', value: `${repo.avgFailureRate.toFixed(1)}%` },
+            { label: 'Org Average', value: `${orgAvgFailure.toFixed(1)}%` },
+            { label: 'Periods Analyzed', value: repo.count }
+          ],
+          recommendations: [
+            { text: `Increase test coverage in ${repo.repo}`, actionType: 'process' },
+            { text: 'Require additional manual review depth for this repo', actionType: 'process' },
+            { text: 'Consider requiring code reasoning summaries for changes', actionType: 'process' }
+          ],
+          source: 'github',
+          metricId: 'eng.change_failure_rate'
+        });
+      }
+    }
+  } catch (e) {
+    console.warn('[RULE_HIGH_RISK] Error:', e);
+  }
+  
+  return insights;
+};
+
+/**
+ * RULE 8: Review Quality Degradation (Rubber-Stamping)
+ * Detects when faster reviews correlate with quality issues
+ */
+const ruleReviewQualityDegradation: Rule = ({ engOutput, productivity, overlap }) => {
+  const insights: PerformanceInsight[] = [];
+  
+  if (!engOutput?.length || engOutput.length < 4) {
+    if (import.meta.env.DEV) {
+      console.debug('[RULE_REVIEW_QUALITY] Skip: need at least 4 periods');
+    }
+    return [];
+  }
+  
+  try {
+    // Split into first half and second half
+    const sorted = [...engOutput].sort((a, b) => a.period.localeCompare(b.period));
+    const mid = Math.floor(sorted.length / 2);
+    const firstHalf = sorted.slice(0, mid);
+    const secondHalf = sorted.slice(mid);
+    
+    const avgReviewTimeFirst = mean(firstHalf.map(g => g.timeToFirstReviewHours || 0).filter(t => t > 0));
+    const avgReviewTimeSecond = mean(secondHalf.map(g => g.timeToFirstReviewHours || 0).filter(t => t > 0));
+    
+    const avgReopenFirst = mean(firstHalf.map(g => (g as any).reopenRatePct || g.changeFailureRatePct || 0));
+    const avgReopenSecond = mean(secondHalf.map(g => (g as any).reopenRatePct || g.changeFailureRatePct || 0));
+    
+    const reviewTimeChange = (avgReviewTimeFirst - avgReviewTimeSecond) / avgReviewTimeFirst;
+    const reopenChange = (avgReopenSecond - avgReopenFirst) / Math.max(avgReopenFirst, 1);
+    
+    // Fire if review time decreased by 40%+ AND reopen rate increased
+    if (reviewTimeChange > 0.4 && reopenChange > 0.2) {
+      insights.push({
+        id: `review-quality-degradation-${Date.now()}`,
+        title: 'Review speed improved, but review quality declined',
+        description: `Review time decreased by ${(reviewTimeChange * 100).toFixed(0)}%, but failure/reopen rate increased by ${(reopenChange * 100).toFixed(0)}%. This suggests reviews may be getting faster but less thorough.`,
+        severity: 'warning',
+        tags: ['review-quality', 'process', 'quality'],
+        related: {},
+        evidence: [
+          { label: 'Review Time Change', value: `${(reviewTimeChange * 100).toFixed(0)}%` },
+          { label: 'Reopen Rate Change', value: `+${(reopenChange * 100).toFixed(0)}%` },
+          { label: 'Avg Review Time (recent)', value: `${avgReviewTimeSecond.toFixed(1)}h` },
+          { label: 'Avg Reopen Rate (recent)', value: `${avgReopenSecond.toFixed(1)}%` }
+        ],
+        recommendations: [
+          { text: 'Establish a "minimum review depth" guideline or checklist', actionType: 'process' },
+          { text: 'Require architecture notes for complex changes', actionType: 'process' },
+          { text: 'Balance review speed with thoroughness in team discussions', actionType: 'process' }
+        ],
+        source: 'github',
+        metricId: 'eng.review_quality'
+      });
+    }
+  } catch (e) {
+    console.warn('[RULE_REVIEW_QUALITY] Error:', e);
+  }
+  
+  return insights;
+};
+
+/**
+ * RULE 9: AI Adoption Experiment Impact (Before/After)
+ * Detects significant changes after a marked event
+ * Note: Requires event marking - simplified version compares periods
+ */
+const ruleAIAdoptionExperiment: Rule = ({ engOutput, productivity, overlap }) => {
+  const insights: PerformanceInsight[] = [];
+  
+  if (!engOutput?.length || !productivity?.length || engOutput.length < 4) {
+    if (import.meta.env.DEV) {
+      console.debug('[RULE_AI_EXPERIMENT] Skip: need at least 4 periods');
+    }
+    return [];
+  }
+  
+  try {
+    // Simple before/after split (assumes adoption happened mid-timeline)
+    const sortedProd = [...productivity].sort((a, b) => a.period.localeCompare(b.period));
+    const sortedGH = [...engOutput].sort((a, b) => a.period.localeCompare(b.period));
+    
+    const mid = Math.floor(sortedProd.length / 2);
+    const beforeAI = mean(sortedProd.slice(0, mid).map(p => p.aiAssists || 0));
+    const afterAI = mean(sortedProd.slice(mid).map(p => p.aiAssists || 0));
+    
+    const aiIncrease = (afterAI - beforeAI) / Math.max(beforeAI, 1);
+    
+    // Only fire if there was a significant AI adoption (50%+ increase)
+    if (aiIncrease > 0.5) {
+      const midGH = Math.floor(sortedGH.length / 2);
+      const beforeCycle = mean(sortedGH.slice(0, midGH).map(g => g.prCycleTimeHours || 0).filter(t => t > 0));
+      const afterCycle = mean(sortedGH.slice(midGH).map(g => g.prCycleTimeHours || 0).filter(t => t > 0));
+      
+      const cycleChange = (beforeCycle - afterCycle) / beforeCycle;
+      
+      if (Math.abs(cycleChange) > 0.15) {
+        insights.push({
+          id: `ai-experiment-${Date.now()}`,
+          title: `AI adoption ${cycleChange > 0 ? 'increased' : 'decreased'} team throughput by ${Math.abs(cycleChange * 100).toFixed(0)}%`,
+          description: `After AI usage increased by ${(aiIncrease * 100).toFixed(0)}%, PR cycle time ${cycleChange > 0 ? 'decreased' : 'increased'} by ${Math.abs(cycleChange * 100).toFixed(0)}%. This suggests ${cycleChange > 0 ? 'positive' : 'negative'} impact from AI adoption.`,
+          severity: cycleChange > 0 ? 'highlight' : 'warning',
+          tags: ['ai-adoption', 'experiment', 'impact'],
+          related: {},
+          evidence: [
+            { label: 'AI Usage Increase', value: `${(aiIncrease * 100).toFixed(0)}%` },
+            { label: 'Cycle Time Change', value: `${(cycleChange * 100).toFixed(0)}%` },
+            { label: 'Before Cycle Time', value: `${beforeCycle.toFixed(1)}h` },
+            { label: 'After Cycle Time', value: `${afterCycle.toFixed(1)}h` }
+          ],
+          recommendations: cycleChange > 0 ? [
+            { text: 'Consider expanding AI tool rollout to other teams', actionType: 'tooling' },
+            { text: 'Document successful adoption patterns for replication', actionType: 'process' }
+          ] : [
+            { text: 'Review AI tool usage patterns and provide additional training', actionType: 'process' },
+            { text: 'Identify and address adoption challenges', actionType: 'process' }
+          ],
+          source: 'combined',
+          metricId: 'prod.ai_adoption_impact'
+        });
+      }
+    }
+  } catch (e) {
+    console.warn('[RULE_AI_EXPERIMENT] Error:', e);
+  }
+  
+  return insights;
+};
+
+/**
+ * RULE 10: Coverage Gap Detection (Blind Spots)
+ * Already partially implemented in ruleInsufficientData, but enhanced here
+ */
+const ruleCoverageGapDetection: Rule = ({ engOutput, productivity, overlap, ghSeries, prodSeries }) => {
+  const insights: PerformanceInsight[] = [];
+  
+  try {
+    const hasGH = (engOutput?.length || 0) > 0;
+    const hasProd = (productivity?.length || 0) > 0;
+    const actualOverlap = overlap ?? 0;
+    
+    // Tool/IDE coverage check
+    if (hasProd) {
+      const tools = new Set(productivity.map(p => p.tool).filter(Boolean));
+      const toolCoverage = tools.size;
+      
+      if (toolCoverage < 3) {
+        insights.push({
+          id: `coverage-gap-ide-${Date.now()}`,
+          title: 'Limited IDE coverage prevents deeper insights',
+          description: `We have AI usage data for only ${toolCoverage} IDE(s). Expanding coverage to more IDEs will enable richer productivity insights.`,
+          severity: 'info',
+          tags: ['coverage', 'telemetry', 'meta'],
+          related: { tools: Array.from(tools) },
+          evidence: [
+            { label: 'IDEs with Data', value: toolCoverage },
+            { label: 'IDEs', value: Array.from(tools).join(', ') },
+            { label: 'Productivity Periods', value: productivity.length }
+          ],
+          recommendations: [
+            { text: 'Install the ChaosMonkey plugin for JetBrains IDEs', actionType: 'tooling' },
+            { text: 'Encourage team to enable telemetry in their primary IDEs', actionType: 'process' }
+          ],
+          source: 'productivity',
+          metricId: 'meta.coverage'
+        });
+      }
+    }
+    
+    // Overlap coverage check
+    if (hasGH && hasProd && actualOverlap < 2) {
+      insights.push({
+        id: `coverage-gap-overlap-${Date.now()}`,
+        title: 'Missing telemetry overlap prevents cross-dataset insights',
+        description: `We have GitHub data for ${engOutput?.length || 0} periods and AI usage data for ${productivity?.length || 0} periods, but only ${actualOverlap} overlapping period(s). This limits quality and cycle-time correlation insights.`,
+        severity: 'warning',
+        tags: ['coverage', 'overlap', 'meta'],
+        related: {},
+        evidence: [
+          { label: 'GitHub Periods', value: engOutput?.length || 0 },
+          { label: 'Productivity Periods', value: productivity?.length || 0 },
+          { label: 'Overlapping Periods', value: actualOverlap },
+          { label: 'Coverage Gap', value: `${100 - ((actualOverlap / Math.max(engOutput?.length || 1, productivity?.length || 1)) * 100).toFixed(0)}%` }
+        ],
+        recommendations: [
+          { text: 'Widen the date range to capture more overlapping data', actionType: 'process' },
+          { text: 'Ensure continuous telemetry collection from all sources', actionType: 'tooling' }
+        ],
+        source: 'combined',
+        metricId: 'meta.overlap'
+      });
+    }
+    
+    // GitHub repo coverage check
+    if (hasGH) {
+      const repos = new Set((engOutput || []).map(g => (g as any).repo).filter(Boolean));
+      const repoCoverage = repos.size;
+      
+      if (repoCoverage > 0 && repoCoverage < 3 && hasGH) {
+        insights.push({
+          id: `coverage-gap-repos-${Date.now()}`,
+          title: 'Limited GitHub repository coverage',
+          description: `We have GitHub data for only ${repoCoverage} repository/ies. Expanding coverage will provide org-wide insights.`,
+          severity: 'info',
+          tags: ['coverage', 'github', 'meta'],
+          related: { repos: Array.from(repos) },
+          evidence: [
+            { label: 'Repos with Data', value: repoCoverage },
+            { label: 'Repos', value: Array.from(repos).join(', ') || 'default' }
+          ],
+          recommendations: [
+            { text: 'Enable GitHub OAuth permissions for missing repositories', actionType: 'tooling' },
+            { text: 'Configure webhook integrations for additional repos', actionType: 'tooling' }
+          ],
+          source: 'github',
+          metricId: 'meta.github_coverage'
+        });
+      }
+    }
+  } catch (e) {
+    console.warn('[RULE_COVERAGE_GAP] Error:', e);
+  }
+  
+  return insights;
+};
+
+// --- Register all rules (keep Rule 1 you already added) ---
+export const generatePerformanceInsights = (input: PerformanceInputs): PerformanceInsight[] => {
+  // ===== DEMO OVERRIDE FOR DEBUGGING =====
+  // Force hard-coded insights in DEMO_MODE to verify UI wiring
+  if (DEMO_MODE && FORCE_DEMO_INSIGHTS) {
+    console.warn('[PI_ENGINE] FORCING DEMO INSIGHTS', { 
+      DEMO_MODE, 
+      overlap: input.overlap,
+      engLen: input.engOutput?.length,
+      prodLen: input.productivity?.length
+    })
+    
+    const demoInsights: PerformanceInsight[] = [
+      {
+        id: 'demo-forced-1',
+        title: 'DEMO: AI Usage Shows Positive Correlation',
+        description: 'This is a hard-coded demo insight to verify the UI rendering pipeline is working correctly.',
+        severity: 'highlight',
+        cicdStage: 'plan-code',
+        tags: ['demo', 'ai', 'forced'],
+        related: { tools: ['vscode'] },
+        evidence: [
+          { label: 'Data Source', value: 'Hard-coded for debugging' },
+          { label: 'Correlation', value: '0.75' },
+          { label: 'Confidence', value: '95%' }
+        ],
+        recommendations: [
+          { text: 'This is a test insight - verify it appears in the UI', actionType: 'process' }
+        ],
+        metricId: 'demo.test',
+        priorityScore: 80
+      },
+      {
+        id: 'demo-forced-2',
+        title: 'DEMO: Code Review Bottleneck Detected',
+        description: 'Another hard-coded insight to test rendering of multiple items.',
+        severity: 'warning',
+        cicdStage: 'review',
+        tags: ['demo', 'review', 'forced'],
+        related: {},
+        evidence: [
+          { label: 'Data Source', value: 'Hard-coded' },
+          { label: 'Time to Review', value: '4.5 hours' }
+        ],
+        recommendations: [
+          { text: 'This is also a test insight', actionType: 'process' }
+        ],
+        metricId: 'demo.test2',
+        priorityScore: 60
+      },
+      {
+        id: 'demo-forced-3',
+        title: 'DEMO: Deployment Frequency Improving',
+        description: 'Third demo insight to test insights display.',
+        severity: 'opportunity',
+        cicdStage: 'deploy-operate',
+        tags: ['demo', 'deploy', 'forced'],
+        related: {},
+        evidence: [
+          { label: 'Data Source', value: 'Hard-coded' },
+          { label: 'Frequency', value: '4.2 per week' }
+        ],
+        recommendations: [
+          { text: 'Keep up the good work!', actionType: 'process' }
+        ],
+        metricId: 'demo.test3',
+        priorityScore: 50
+      }
+    ]
+    
+    // Optionally append fallback insights
+    try {
+      const fallbacks = ruleFallbackInsights(input) || []
+      console.warn('[PI_ENGINE] Appending fallback insights:', fallbacks.length)
+      return [...demoInsights, ...fallbacks]
+    } catch (e) {
+      console.warn('[PI_ENGINE] Fallback error, returning demo only:', e)
+      return demoInsights
+    }
+  }
+  // ===== END DEMO OVERRIDE =====
+
+  // Always log key context (not just DEV)
+  console.warn("[PI_ENGINE_INIT]", {
+  DEV: import.meta.env.DEV,
+  MODE: import.meta.env.MODE,
+  DEMO_MODE,
+  FORCE_DEMO_INSIGHTS,
+  prodGlobalSource: input.prodGlobalSource,
+  overlap: input.overlap,
+  engLen: input.engOutput?.length,
+  prodLen: input.productivity?.length,
+})
+
+  console.log("[PI_ENGINE] DEMO_MODE:', DEMO_MODE, 'prodGlobalSource:', input.prodGlobalSource, 'overlap:', input.overlap);
+  
+  console.log('🔍 PerformanceEngine - input:', input);
+  console.log('🔍 PerformanceEngine - engOutput length:', input.engOutput?.length || 0);
+  console.log('🔍 PerformanceEngine - productivity length:', input.productivity?.length || 0);
+  
+  if (import.meta.env.DEV) {
+    console.debug('[PI_ENGINE] Thresholds:', {
+      minPoints: DEMO_MODE ? DEMO_MIN_POINTS : 4,
+      minAbsR: DEMO_MODE ? DEMO_MIN_ABS_R : 0.6,
+      pMax: DEMO_MODE ? DEMO_P_MAX : 0.10
+    })
+  }
+  
+  // ========== RULE REGISTRY: 10 RULES + 2 META ==========
+  // ONLY these 12 rules are active. Everything else is disabled.
+  const rules: [string, Rule][] = [
+    // === 10 CORE ENGINEERING INSIGHTS ===
+    ['ai-improves-ct',     ruleAIImprovesCycleTime],
+    ['ai-slows-ct',        ruleAISlowsCycleTime],
+    ['ai-reopen-rate',     ruleAIImpactsReopenRate],
+    ['team-ai-throughput', ruleTeamAIAdoptionVsThroughput],
+    ['review-bottleneck',  ruleReviewBottleneck],
+    ['coding-vs-output',   ruleCodingTimeVsOutput],
+    ['high-risk-area',     ruleHighRiskArea],
+    ['review-quality',     ruleReviewQualityDegradation],
+    ['ai-experiment',      ruleAIAdoptionExperiment],
+    ['coverage-gap',       ruleCoverageGapDetection],
+    
+    // === 2 META RULES ===
+    ['insufficient-data',  ruleInsufficientData],  // Explains when we can't run rules
+    ['fallback',           ruleFallbackInsights],  // Last resort if nothing fires
+  ];
+  
+  if (import.meta.env.DEV) {
+    console.debug('[PI_RULE_REGISTRY] Active rules:', rules.map(([id]) => id));
+    console.debug('[PI_RULE_REGISTRY] Total count:', rules.length);
+  }
+
+  const raw: PerformanceInsight[] = [];
+  for (const [name, rule] of rules) {
+    let out: PerformanceInsight[] = []
+    
+    try {
+      out = rule(input) || [];
+      
+      // Enhanced per-rule logging
+      if (import.meta.env.DEV) {
+        console.debug(`[PI_RULE] ${name}:`, {
+          count: out.length,
+          sample: out.slice(0, 1).map(i => ({
+            id: i.id,
+            title: i.title.substring(0, 60),
+            metricId: i.metricId,
+            tags: i.tags,
+            severity: i.severity
+          }))
+        })
+      }
+      
+      console.log(`🔍 [insights][rule] ${name}:`, out.length, out);
+      raw.push(...out);
+    } catch (e) {
+      console.warn(`🔍 [insights][rule] ${name} ERROR`, e);
+      if (import.meta.env.DEV) {
+        console.error(`[PI_RULE_ERROR] ${name}:`, e)
+      }
+    }
+  }
+
+  console.log('🔍 PerformanceEngine - total raw insights:', raw.length);
+  
+  if (import.meta.env.DEV) {
+    console.debug('[PI_ENGINE] === SELECTION PIPELINE ===')
+    console.debug('[PI_ENGINE] Stage 1 - Raw from rules:', raw.length)
+  }
+
+  try {
+    const noDupes = dedupeKeepPrimaryTool(raw);       // IDE-specific, no cross-tool dupes
+    console.log('🔍 PerformanceEngine - after dedupe:', noDupes.length);
+    
+    if (import.meta.env.DEV) {
+      console.debug('[PI_ENGINE] Stage 2 - After dedupe:', noDupes.length)
+    }
+
+    // DEMO_MODE: Use higher limits for richer insights
+    const totalLimit = DEMO_MODE 
+      ? 12  // Demo: Show more insights
+      : Number(import.meta.env.VITE_PERF_INSIGHTS_MAX ?? 16);
+    const perToolMin = Number(import.meta.env.VITE_PERF_INSIGHTS_PER_TOOL_MIN ?? 1);
+    const sigP = Number(import.meta.env.VITE_PERF_INSIGHTS_P_MAX ?? 0.10);
+
+    console.log('🔍 PerformanceEngine - env config:', { totalLimit, perToolMin, sigP });
+
+    const floorSelected = selectWithPerToolFloor({
+      raw,
+      deduped: noDupes,
+      totalLimit,
+      perToolMin,
+      sigP,
+    });
+    console.log('🔍 PerformanceEngine - after floor selection:', floorSelected.length);
+    
+    if (import.meta.env.DEV) {
+      console.debug('[PI_ENGINE] Stage 3 - After floor selection:', floorSelected.length)
+    }
+    console.log('🔍 PerformanceEngine - floor selected items:', floorSelected.map(i => ({
+      id: i.id,
+      tool: i.related?.tools?.[0],
+      title: i.title.substring(0, 50) + '...',
+      p: i.evidence.find(e => e.label.toLowerCase().includes('p'))?.value,
+      r: i.evidence.find(e => e.label.toLowerCase().includes('correlation') && e.label.includes('r'))?.value,
+      equivalenceKey: equivalenceKey(i)
+    })));
+
+    // Keep your existing diversity filter but run it AFTER the floor selection.
+    // DEMO_MODE: Increase perMetricMax from 2 to allow more varied insights
+    const perMetricMax = DEMO_MODE ? 4 : 2  // Demo: 4 insights per metric (vs 2)
+    
+    const diversified = diversifyInsights(floorSelected, perMetricMax, totalLimit, {
+      lockedEquivalenceKeys: new Set(floorSelected.map(i => i.id))
+    });
+    console.log('🔍 PerformanceEngine - after diversity:', diversified.length);
+    
+    if (import.meta.env.DEV) {
+      console.debug('[PI_ENGINE] Stage 4 - After diversity:', {
+        perMetricMax,
+        count: diversified.length,
+        sample: diversified.slice(0, 3).map(i => i.title.substring(0, 50))
+      })
+    }
+    console.log('🔍 PerformanceEngine - diversified items:', diversified.map(i => ({
+      id: i.id,
+      tool: i.related?.tools?.[0],
+      title: i.title.substring(0, 50) + '...',
+      p: i.evidence.find(e => e.label.toLowerCase().includes('p'))?.value,
+      r: i.evidence.find(e => e.label.toLowerCase().includes('correlation') && e.label.includes('r'))?.value,
+      equivalenceKey: equivalenceKey(i)
+    })));
+
+    const processed = postProcessInsights(diversified);
+    console.log('🔍 PerformanceEngine - after post-processing:', processed.length);
+    
+    if (import.meta.env.DEV) {
+      console.debug('[PI_ENGINE] Stage 5 - Final processed:', processed.length)
+      console.debug('[PI_ENGINE] === FINAL OUTPUT ===')
+      console.debug('[PI_ENGINE] Returning insights:', {
+        total: processed.length,
+        byTool: processed.reduce((acc, i) => {
+          const tool = i.related?.tools?.[0] || 'unknown'
+          acc[tool] = (acc[tool] || 0) + 1
+          return acc
+        }, {}),
+        bySeverity: processed.reduce((acc, i) => {
+          acc[i.severity] = (acc[i.severity] || 0) + 1
+          return acc
+        }, {}),
+        titles: processed.map(i => i.title.substring(0, 60))
+      })
+    }
+    console.log('🔍 PerformanceEngine - final items:', processed.map(i => ({
+      id: i.id,
+      tool: i.related?.tools?.[0],
+      title: i.title.substring(0, 50) + '...',
+      p: i.evidence.find(e => e.label.toLowerCase().includes('p'))?.value,
+      r: i.evidence.find(e => e.label.toLowerCase().includes('correlation') && e.label.includes('r'))?.value,
+      equivalenceKey: equivalenceKey(i),
+      priorityScore: i.priorityScore,
+      critical: i.critical
+    })));
+
+    console.log('🔍 [insights] counts → raw:', raw.length, 'deduped:', noDupes.length, 'floor-selected:', floorSelected.length, 'diversified:', diversified.length, 'processed:', processed.length);
+    return processed;
+  } catch (e) {
+    console.error('🔍 [insights] postProcess failed — returning raw list:', e);
+    return raw;
+  }
+};

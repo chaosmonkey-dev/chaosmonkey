@@ -1,0 +1,42 @@
+# Dependencies
+node_modules/
+vendor/
+
+# Build output
+dist/
+out/
+.vite/
+coverage/
+test-results/
+playwright-report/
+blob-report/
+
+# Environment — never commit real env files
+.env
+.env.*
+!.env.example
+
+# Runtime data / databases
+*.sqlite
+*.sqlite-*
+*.log
+cookies.txt
+.DS_Store
+.phpunit.result.cache
+
+# Laravel runtime
+backend/storage/app/*
+backend/storage/framework/cache/data/*
+backend/storage/framework/sessions/*
+backend/storage/framework/views/*
+backend/storage/framework/testing/*
+backend/storage/logs/*
+backend/bootstrap/cache/*
+!**/.gitkeep
+
+# Extension build artifacts (source dirs only — packaged artifacts
+# served by the backend live under backend/resources/extensions/)
+extensions/*/*.vsix
+extensions/*/*.tgz
+extensions/*/dist/
+extensions/*/out/

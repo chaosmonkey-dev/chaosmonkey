@@ -1,0 +1,6 @@
+[
+  { "id": "ai_assist_rate", "topIde": "Cursor", "value": 46.2, "hasCoverage": true },
+  { "id": "ai_acceptance_share", "value": null, "hasCoverage": true },
+  { "id": "ai_usage_trend_30d", "value": null, "hasCoverage": true },
+  { "id": "ai_review_presence", "value": null, "hasCoverage": false }
+]
