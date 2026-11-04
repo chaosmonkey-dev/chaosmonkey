@@ -10,7 +10,6 @@
     "build": "vite build",
     "preview": "vite preview",
     "start": "node server.js",
-    "lint": "eslint . --ext .vue,.js,.ts",
     "lint:fix": "eslint . --ext .vue,.js,.ts --fix",
     "test": "vitest run"
   },
