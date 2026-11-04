@@ -31,6 +31,16 @@ class GitHubOAuthController extends Controller
         $clientId = config('services.github.client_id');
         $redirectUri = config('services.github.redirect');
 
+        // GitHub OAuth is optional — on a default install it is unconfigured.
+        // Fail closed with a clear error rather than emitting an auth URL with
+        // an empty client_id that dead-ends at github.com.
+        if (empty($clientId) || empty($redirectUri)) {
+            return response()->json([
+                'error' => 'OAUTH_NOT_CONFIGURED',
+                'message' => 'GitHub OAuth is not configured on this instance. Set GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET and GITHUB_OAUTH_REDIRECT to enable it.',
+            ], 400);
+        }
+
         // CR-X Wave 2: Intent-based OAuth scope selection.
         //
         // Two explicit intents are supported:
@@ -757,6 +767,10 @@ class GitHubOAuthController extends Controller
 
         return response()->json([
             'oauth_authenticated' => !empty($oauthToken),
+            // Whether the instance has GitHub OAuth app credentials configured —
+            // lets clients hide sign-in buttons instead of dead-ending.
+            'oauth_configured' => !empty(config('services.github.client_id'))
+                && !empty(config('services.github.redirect')),
             'user' => $userData ?? null,
             'token_type' => $oauthToken ? 'oauth' : 'personal_access_token',
             // CR-X B6: Expose token_purpose so the frontend can surface

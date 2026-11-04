@@ -36,5 +36,10 @@
         <env name="QUEUE_CONNECTION" value="sync"/>
         <env name="SESSION_DRIVER" value="array"/>
         <env name="TELESCOPE_ENABLED" value="false"/>
+        <!-- Test-only GitHub OAuth config — exercises the redirect/callback
+             paths as if OAuth were configured. Production stays unconfigured. -->
+        <env name="GITHUB_CLIENT_ID" value="test-github-client-id"/>
+        <env name="GITHUB_CLIENT_SECRET" value="test-github-client-secret"/>
+        <env name="GITHUB_OAUTH_REDIRECT" value="http://localhost/api/github/oauth/callback"/>
     </php>
 </phpunit>

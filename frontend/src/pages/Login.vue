@@ -8,8 +8,8 @@
       <div class="login-body text-center">
         <p class="mb-4">Sign in to access your engineering dashboard</p>
         
-        <!-- GitHub Authentication Options -->
-        <div class="github-auth-section mb-4">
+        <!-- GitHub Authentication Options (hidden when OAuth unconfigured) -->
+        <div v-if="githubConfigured" class="github-auth-section mb-4">
           <div class="d-grid gap-2">
             <button 
               @click="signInWithGitHub" 
@@ -37,8 +37,8 @@
             New to ChaosMonkey? Use "Create Account" to set up your organization.
           </div>
         </div>
-        
-        <div class="my-3">or</div>
+
+        <div v-if="githubConfigured" class="my-3">or</div>
 
         <!-- Email/Password Login -->
         <div class="email-auth-section mb-4">
@@ -161,6 +161,7 @@ const isCreatingAccount = ref(false)
 const clientId = import.meta.env.VITE_GITHUB_CLIENT_ID
 
 // CR-X: Email/password login state
+const githubConfigured = ref(true)
 const emailForm = ref({ email: '', password: '' })
 const isLoadingEmail = ref(false)
 const emailError = ref('')
@@ -211,7 +212,11 @@ const checkOAuthStatus = async () => {
     if (response.ok) {
       const data = await response.json()
       console.log('OAuth status response:', data)
-      
+
+      if (data.oauth_configured === false) {
+        githubConfigured.value = false
+      }
+
       if (data.oauth_authenticated) {
         console.log('OAuth connected on backend, but no dashboard token — user must complete login flow')
       }
