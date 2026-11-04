@@ -372,6 +372,9 @@ class CanonicalDeveloperFilterTest extends TestCase
 
     public function test_local_developer_selector_narrows_population_not_fail_open(): void
     {
+        config()->set('local_developer.static_identities', ['local-developer', '4', '18269556']);
+        config()->set('local_developer.sample_persona_ids', ['90001', '90002', '90003', '90004', '90005', '90006']);
+
         // Create events with user_ids that match the static identity set
         // (local-developer, 4, 18269556) and some that don't
         $this->createSessionEvent('local-developer', 'cursor', 'cursor', $this->organizationId);

@@ -163,7 +163,7 @@ class ReleaseProvenanceSafetyTest extends TestCase
     private function insertRelease(string $source, string $publishedAt = '2026-06-15 12:00:00'): void
     {
         Release::create([
-            'repo_name' => 'org/example-repo',
+            'repo_name' => 'local-demo/cm-activity-sim',
             'tag_name' => 'v-' . uniqid(),
             'published_at' => $publishedAt,
             'author_login' => 'cm-activity-sim',
@@ -446,7 +446,7 @@ class ReleaseProvenanceSafetyTest extends TestCase
         $oauthUser = ['login' => 'octo-user', 'token_purpose' => 'engineering_integration'];
         // Live mode requires a repoAllowList — applyOrganizationRepoFilter
         // is fail-closed (1 = 0) without one.
-        $result = $this->callCalculateReleaseMetrics($oauthUser, false, ['org/example-repo']);
+        $result = $this->callCalculateReleaseMetrics($oauthUser, false, ['local-demo/cm-activity-sim']);
         $this->assertEquals(1, $result['total_releases']);
         $this->assertNotNull($result['latest_release']);
     }
@@ -455,7 +455,7 @@ class ReleaseProvenanceSafetyTest extends TestCase
     {
         $this->insertRelease('github_api_sync');
         // repoAllowList alone is NOT sufficient — no engineering auth
-        $result = $this->callCalculateReleaseMetrics(null, false, ['org/example-repo']);
+        $result = $this->callCalculateReleaseMetrics(null, false, ['local-demo/cm-activity-sim']);
         $this->assertNull($result['total_releases']);
         $this->assertSame('no_evidence_authority', $result['unavailable']);
     }
@@ -464,7 +464,7 @@ class ReleaseProvenanceSafetyTest extends TestCase
     {
         $this->insertRelease('db_sync');
         // repoAllowList alone is NOT sufficient — no engineering auth
-        $result = $this->callCalculateReleaseMetrics(null, false, ['org/example-repo']);
+        $result = $this->callCalculateReleaseMetrics(null, false, ['local-demo/cm-activity-sim']);
         $this->assertNull($result['total_releases']);
         $this->assertSame('no_evidence_authority', $result['unavailable']);
     }
@@ -473,7 +473,7 @@ class ReleaseProvenanceSafetyTest extends TestCase
     {
         $this->insertRelease('db_sync');
         $oauthUser = ['login' => 'octo-user', 'token_purpose' => 'engineering_integration'];
-        $result = $this->callCalculateReleaseMetrics($oauthUser, false, ['org/example-repo']);
+        $result = $this->callCalculateReleaseMetrics($oauthUser, false, ['local-demo/cm-activity-sim']);
         $this->assertEquals(1, $result['total_releases']);
         $this->assertNotNull($result['latest_release']);
     }
@@ -482,7 +482,7 @@ class ReleaseProvenanceSafetyTest extends TestCase
     {
         $this->insertRelease('demo');
         $oauthUser = ['login' => 'octo-user', 'token_purpose' => 'engineering_integration'];
-        $result = $this->callCalculateReleaseMetrics($oauthUser, false, ['org/example-repo']);
+        $result = $this->callCalculateReleaseMetrics($oauthUser, false, ['local-demo/cm-activity-sim']);
         $this->assertEquals(0, $result['total_releases']);
     }
 
@@ -522,7 +522,7 @@ class ReleaseProvenanceSafetyTest extends TestCase
     {
         $this->insertRelease('cm_activity_sim', '2026-06-15 12:00:00');
         $oauthUser = ['login' => 'octo-user', 'token_purpose' => 'engineering_integration'];
-        $result = $this->callAggregateOutcomesByMonth(false, ['org/example-repo'], $oauthUser);
+        $result = $this->callAggregateOutcomesByMonth(false, ['local-demo/cm-activity-sim'], $oauthUser);
         foreach ($result as $entry) {
             $this->assertEquals(0, $entry['release_count']);
         }
@@ -532,7 +532,7 @@ class ReleaseProvenanceSafetyTest extends TestCase
     {
         $this->insertRelease('github_api_sync', '2026-06-15 12:00:00');
         $oauthUser = ['login' => 'octo-user', 'token_purpose' => 'engineering_integration'];
-        $result = $this->callAggregateOutcomesByMonth(false, ['org/example-repo'], $oauthUser);
+        $result = $this->callAggregateOutcomesByMonth(false, ['local-demo/cm-activity-sim'], $oauthUser);
         $juneEntry = collect($result)->firstWhere('month', '2026-06');
         $this->assertNotNull($juneEntry);
         $this->assertEquals(1, $juneEntry['release_count']);
@@ -542,7 +542,7 @@ class ReleaseProvenanceSafetyTest extends TestCase
     {
         $this->insertRelease('github_api_sync', '2026-06-15 12:00:00');
         // repoAllowList alone is NOT sufficient — no engineering auth
-        $result = $this->callAggregateOutcomesByMonth(false, ['org/example-repo'], null);
+        $result = $this->callAggregateOutcomesByMonth(false, ['local-demo/cm-activity-sim'], null);
         foreach ($result as $entry) {
             $this->assertEquals(0, $entry['release_count']);
         }
@@ -552,7 +552,7 @@ class ReleaseProvenanceSafetyTest extends TestCase
     {
         $this->insertRelease('db_sync', '2026-06-15 12:00:00');
         // repoAllowList alone is NOT sufficient — no engineering auth
-        $result = $this->callAggregateOutcomesByMonth(false, ['org/example-repo'], null);
+        $result = $this->callAggregateOutcomesByMonth(false, ['local-demo/cm-activity-sim'], null);
         foreach ($result as $entry) {
             $this->assertEquals(0, $entry['release_count']);
         }
@@ -562,7 +562,7 @@ class ReleaseProvenanceSafetyTest extends TestCase
     {
         $this->insertRelease('db_sync', '2026-06-15 12:00:00');
         $oauthUser = ['login' => 'octo-user', 'token_purpose' => 'engineering_integration'];
-        $result = $this->callAggregateOutcomesByMonth(false, ['org/example-repo'], $oauthUser);
+        $result = $this->callAggregateOutcomesByMonth(false, ['local-demo/cm-activity-sim'], $oauthUser);
         $juneEntry = collect($result)->firstWhere('month', '2026-06');
         $this->assertNotNull($juneEntry);
         $this->assertEquals(1, $juneEntry['release_count']);
@@ -610,13 +610,13 @@ class ReleaseProvenanceSafetyTest extends TestCase
     {
         // Real ReleaseSyncService stamps metadata.data_source, not metadata.source
         $rel = Release::create([
-            'repo_name' => 'org/example-repo',
+            'repo_name' => 'local-demo/cm-activity-sim',
             'tag_name' => 'v1.0',
             'published_at' => '2026-06-15 12:00:00',
             'metadata' => ['data_source' => 'github_api_sync', 'draft' => false],
         ]);
         $oauthUser = ['login' => 'octo-user', 'token_purpose' => 'engineering_integration'];
-        $result = $this->callCalculateReleaseMetrics($oauthUser, false, ['org/example-repo']);
+        $result = $this->callCalculateReleaseMetrics($oauthUser, false, ['local-demo/cm-activity-sim']);
         $this->assertEquals(1, $result['total_releases']);
     }
 
@@ -626,7 +626,7 @@ class ReleaseProvenanceSafetyTest extends TestCase
         $this->insertRelease('github_api_sync');
         // identity-only token → isEngineeringEvidenceEligible returns false
         $oauthUser = ['login' => 'octo-user', 'token_purpose' => 'identity_only'];
-        $result = $this->callCalculateReleaseMetrics($oauthUser, false, ['org/example-repo']);
+        $result = $this->callCalculateReleaseMetrics($oauthUser, false, ['local-demo/cm-activity-sim']);
         $this->assertEquals(0, $result['total_releases']);
     }
 
@@ -635,7 +635,7 @@ class ReleaseProvenanceSafetyTest extends TestCase
         // Both tokens exist; engineering token should be usable
         $this->insertRelease('github_api_sync');
         $oauthUser = ['login' => 'octo-user', 'token_purpose' => 'engineering_integration'];
-        $result = $this->callCalculateReleaseMetrics($oauthUser, false, ['org/example-repo']);
+        $result = $this->callCalculateReleaseMetrics($oauthUser, false, ['local-demo/cm-activity-sim']);
         $this->assertEquals(1, $result['total_releases']);
     }
 
@@ -658,7 +658,7 @@ class ReleaseProvenanceSafetyTest extends TestCase
     {
         $this->insertRelease('github_api_sync');
         // No oauthUser at all
-        $result = $this->callCalculateReleaseMetrics(null, false, ['org/example-repo']);
+        $result = $this->callCalculateReleaseMetrics(null, false, ['local-demo/cm-activity-sim']);
         $this->assertNull($result['total_releases']);
         $this->assertSame('no_evidence_authority', $result['unavailable']);
     }
@@ -671,7 +671,7 @@ class ReleaseProvenanceSafetyTest extends TestCase
         config(['services.github_app.installation_id' => '999999']);
         $oauthUser = ['login' => 'octo-user', 'token_purpose' => 'engineering_integration'];
         try {
-            $result = $this->callCalculateReleaseMetrics($oauthUser, false, ['org/example-repo']);
+            $result = $this->callCalculateReleaseMetrics($oauthUser, false, ['local-demo/cm-activity-sim']);
         } finally {
             config(['services.github_app.installation_id' => null]);
         }
@@ -686,7 +686,7 @@ class ReleaseProvenanceSafetyTest extends TestCase
         $this->insertRelease('github_api_sync');
         $oauthUser = ['login' => 'octo-user', 'token_purpose' => 'engineering_integration'];
         try {
-            $result = $this->callCalculateReleaseMetrics($oauthUser, false, ['org/example-repo']);
+            $result = $this->callCalculateReleaseMetrics($oauthUser, false, ['local-demo/cm-activity-sim']);
         } finally {
             config(['services.github_app.installation_id' => null]);
         }

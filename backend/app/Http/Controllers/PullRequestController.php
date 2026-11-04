@@ -2482,11 +2482,11 @@ class PullRequestController extends Controller
             // In Local Lab mode (APP_ENV=local) ONLY, fall back to the
             // explicit, deterministic cm-activity-sim demo GitHub dataset:
             //   - PRs:        data_source = 'cm_activity_sim'   (27 PRs)
-            //   - Deployments: repo_name = 'mattmcclintock/cm-activity-sim' (25 deployments)
+            //   - Deployments: repo_name = 'local-demo/cm-activity-sim' (25 deployments)
             //
             // This is the narrowest possible predicate. It does NOT return
-            // all seeded DB data. It selects the exact demo authority
-            // populations Matt defined for the V1 product demo.
+            // all seeded DB data. It selects the deterministic demo authority
+            // populations for the local demo for the V1 product demo.
             //
             // No Ed / Staging / customer behavior change: the fallback is
             // gated on config('app.env') === 'local'. The strict
@@ -2498,14 +2498,14 @@ class PullRequestController extends Controller
                     return;
                 }
                 if ($model instanceof \App\Models\Deployment) {
-                    $query->where('repo_name', 'mattmcclintock/cm-activity-sim');
+                    $query->where('repo_name', 'local-demo/cm-activity-sim');
                     return;
                 }
                 // CR-X 3C: Releases use the same Local demo repo convention
                 // as deployments. Provenance filtering is applied separately
                 // via isReleaseProvenanceEligible in the consumer methods.
                 if ($model instanceof \App\Models\Release) {
-                    $query->where('repo_name', 'mattmcclintock/cm-activity-sim');
+                    $query->where('repo_name', 'local-demo/cm-activity-sim');
                     return;
                 }
             }

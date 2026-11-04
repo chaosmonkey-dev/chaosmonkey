@@ -163,7 +163,7 @@ class RunDemoDataSeeder extends Seeder
             ->where(function ($query) {
                 $query->where('metadata', 'like', '%"data_source"%')
                       ->orWhere('repo_name', 'like', 'demo-org/%')
-                      ->orWhere('repo_name', 'like', 'mattmcclintock/%')
+                      ->orWhere('repo_name', 'like', 'local-demo/%')
                       ->orWhere('repo_name', 'like', 'AngryMonkeyParty/%');
             })
             ->count();

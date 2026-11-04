@@ -18,7 +18,7 @@ class GitHubCMActivitySimSeeder extends Seeder
     {
         Log::info('[CM_ACTIVITY_SIM_SEEDER] Starting CM Activity Sim PR seeding');
         
-        $repoName = 'mattmcclintock/cm-activity-sim';
+        $repoName = 'local-demo/cm-activity-sim';
         // Use base date of June 20 to ensure all PRs are <= now (June 22)
         // Latest PR will be at hour 63 from base, which is June 22 15:00
         $baseDate = Carbon::parse('2026-06-20');

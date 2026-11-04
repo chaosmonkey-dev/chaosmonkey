@@ -21,7 +21,7 @@ class SeedTelemetryEventsSimulation extends Command
             'session_pattern' => 'short_intense',
             'work_frequency' => 0.9,
             'file_edit_ratio' => 0.8, // High file edit frequency
-            'email' => 'alex.chen@angrymonkey.ai',
+            'email' => 'alex.chen@example.org',
             'team' => 'Platform Engineering'
         ],
         'sarah_rodriguez' => [
@@ -33,7 +33,7 @@ class SeedTelemetryEventsSimulation extends Command
             'session_pattern' => 'long_steady',
             'work_frequency' => 0.85,
             'file_edit_ratio' => 0.6,
-            'email' => 'sarah.rodriguez@angrymonkey.ai',
+            'email' => 'sarah.rodriguez@example.org',
             'team' => 'Platform Engineering'
         ],
         'marcus_kim' => [
@@ -45,7 +45,7 @@ class SeedTelemetryEventsSimulation extends Command
             'session_pattern' => 'mixed_coding_review',
             'work_frequency' => 0.8,
             'file_edit_ratio' => 0.4,
-            'email' => 'marcus.kim@angrymonkey.ai',
+            'email' => 'marcus.kim@example.org',
             'team' => 'Platform Engineering'
         ],
         'jordan_taylor' => [
@@ -57,7 +57,7 @@ class SeedTelemetryEventsSimulation extends Command
             'session_pattern' => 'variable',
             'work_frequency' => 0.7,
             'file_edit_ratio' => 0.5,
-            'email' => 'jordan.taylor@angrymonkey.ai',
+            'email' => 'jordan.taylor@example.org',
             'team' => 'Platform Engineering'
         ],
         'riley_park' => [
@@ -69,7 +69,7 @@ class SeedTelemetryEventsSimulation extends Command
             'session_pattern' => 'very_long_intense',
             'work_frequency' => 0.95,
             'file_edit_ratio' => 0.9,
-            'email' => 'riley.park@angrymonkey.ai',
+            'email' => 'riley.park@example.org',
             'team' => 'Platform Engineering'
         ],
         'sam_martinez' => [
@@ -81,7 +81,7 @@ class SeedTelemetryEventsSimulation extends Command
             'session_pattern' => 'short_cautious',
             'work_frequency' => 0.75,
             'file_edit_ratio' => 0.3,
-            'email' => 'sam.martinez@angrymonkey.ai',
+            'email' => 'sam.martinez@example.org',
             'team' => 'Platform Engineering'
         ]
     ];

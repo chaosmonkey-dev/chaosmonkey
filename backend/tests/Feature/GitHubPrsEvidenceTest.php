@@ -50,7 +50,7 @@ class GitHubPrsEvidenceTest extends TestCase
     public function test_prs_array_has_expected_l3_fields()
     {
         PullRequest::create([
-            'repo_name' => 'org/example-repo',
+            'repo_name' => 'local-demo/cm-activity-sim',
             'pr_number' => 101,
             'user_login' => 'dev1',
             'data_source' => 'cm_activity_sim',
@@ -70,7 +70,7 @@ class GitHubPrsEvidenceTest extends TestCase
         $this->assertArrayHasKey('created_at', $pr);
         $this->assertArrayHasKey('merged_at', $pr);
         // repo maps from repo_name
-        $this->assertEquals('org/example-repo', $pr['repo']);
+        $this->assertEquals('local-demo/cm-activity-sim', $pr['repo']);
         $this->assertEquals('dev1', $pr['user_login']);
         $this->assertEquals('cm_activity_sim', $pr['data_source']);
     }
@@ -78,7 +78,7 @@ class GitHubPrsEvidenceTest extends TestCase
     public function test_prs_array_does_not_expose_developer_id_or_lineage_fields()
     {
         PullRequest::create([
-            'repo_name' => 'org/example-repo',
+            'repo_name' => 'local-demo/cm-activity-sim',
             'pr_number' => 101,
             'developer_id' => 'dev_0',
             'data_source' => 'cm_activity_sim',
@@ -108,7 +108,7 @@ class GitHubPrsEvidenceTest extends TestCase
     {
         // Old PR (outside week window) — should NOT appear in week filter
         PullRequest::create([
-            'repo_name' => 'org/example-repo',
+            'repo_name' => 'local-demo/cm-activity-sim',
             'pr_number' => 100,
             'data_source' => 'cm_activity_sim',
             'created_at' => now()->subYear(),
@@ -116,7 +116,7 @@ class GitHubPrsEvidenceTest extends TestCase
         ]);
         // Recent PR (inside week window) — should appear
         PullRequest::create([
-            'repo_name' => 'org/example-repo',
+            'repo_name' => 'local-demo/cm-activity-sim',
             'pr_number' => 101,
             'data_source' => 'cm_activity_sim',
             'created_at' => now(),
@@ -140,14 +140,14 @@ class GitHubPrsEvidenceTest extends TestCase
         // Both PRs use cm_activity_sim but different repos to prove per-PR
         // provenance is preserved individually.
         PullRequest::create([
-            'repo_name' => 'org/example-repo',
+            'repo_name' => 'local-demo/cm-activity-sim',
             'pr_number' => 201,
             'data_source' => 'cm_activity_sim',
             'created_at' => now(),
             'updated_at' => now(),
         ]);
         PullRequest::create([
-            'repo_name' => 'org/example-repo',
+            'repo_name' => 'local-demo/cm-activity-sim',
             'pr_number' => 202,
             'data_source' => 'cm_activity_sim',
             'created_at' => now(),
@@ -172,7 +172,7 @@ class GitHubPrsEvidenceTest extends TestCase
     {
         for ($i = 0; $i < 10; $i++) {
             PullRequest::create([
-                'repo_name' => 'org/example-repo',
+                'repo_name' => 'local-demo/cm-activity-sim',
                 'pr_number' => 300 + $i,
                 'data_source' => 'cm_activity_sim',
                 'created_at' => now(),
@@ -230,7 +230,7 @@ class GitHubPrsEvidenceTest extends TestCase
 
         // PR visible to Org A under Local Lab authority (cm_activity_sim)
         PullRequest::create([
-            'repo_name' => 'org/example-repo',
+            'repo_name' => 'local-demo/cm-activity-sim',
             'pr_number' => 401,
             'user_login' => 'dev-a-1',
             'data_source' => 'cm_activity_sim',
@@ -238,7 +238,7 @@ class GitHubPrsEvidenceTest extends TestCase
             'updated_at' => now(),
         ]);
         PullRequest::create([
-            'repo_name' => 'org/example-repo',
+            'repo_name' => 'local-demo/cm-activity-sim',
             'pr_number' => 402,
             'user_login' => 'dev-a-2',
             'data_source' => 'cm_activity_sim',

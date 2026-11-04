@@ -126,7 +126,7 @@ class GitHubRealismSeeder extends Seeder
                 'pr_reopened_count' => 1,
             ],
             [
-                'repo_name' => 'example-org/activity-sim',
+                'repo_name' => 'local-demo/cm-activity-sim',
                 'pr_number' => 105,
                 'developer_id' => 'jordan.taylor',
                 'user_login' => 'jordantaylor',
@@ -231,7 +231,7 @@ class GitHubRealismSeeder extends Seeder
                 'pr_reopened_count' => 0,
             ],
             [
-                'repo_name' => 'example-org/activity-sim',
+                'repo_name' => 'local-demo/cm-activity-sim',
                 'pr_number' => 110,
                 'developer_id' => 'marcus.kim',
                 'user_login' => 'marcuskim',

@@ -24,6 +24,8 @@
     </groups>
     <php>
         <env name="APP_ENV" value="testing"/>
+        <!-- Test-only static key — never used outside the test suite -->
+        <env name="APP_KEY" value="base64:ZP2odthEKQq5LR2yaOUTnfli2cbf96uFgtc6Du6rzj0="/>
         <env name="APP_MAINTENANCE_DRIVER" value="file"/>
         <env name="BCRYPT_ROUNDS" value="4"/>
         <env name="CACHE_STORE" value="array"/>

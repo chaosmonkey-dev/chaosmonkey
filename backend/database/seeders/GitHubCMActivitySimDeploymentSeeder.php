@@ -18,7 +18,7 @@ class GitHubCMActivitySimDeploymentSeeder extends Seeder
     {
         Log::info('[CM_ACTIVITY_SIM_DEPLOYMENT_SEEDER] Starting CM Activity Sim deployment seeding');
         
-        $repoName = 'mattmcclintock/cm-activity-sim';
+        $repoName = 'local-demo/cm-activity-sim';
         // Use base date of June 20 to match PR seeder timing
         // Latest deployment will be at hour 60 from base, which is June 22 12:00
         $baseDate = Carbon::parse('2026-06-20');

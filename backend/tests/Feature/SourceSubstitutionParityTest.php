@@ -149,7 +149,7 @@ class SourceSubstitutionParityTest extends TestCase
         for ($i = 1; $i <= 27; $i++) {
             $merged = $i <= 18;
             PullRequest::create([
-                'repo_name' => 'org/example-repo',
+                'repo_name' => 'local-demo/cm-activity-sim',
                 'pr_number' => $i,
                 'developer_id' => 'dev1',
                 'merged_at' => $merged ? "2026-06-{$i} 12:00:00" : null,
@@ -174,7 +174,7 @@ class SourceSubstitutionParityTest extends TestCase
             $isFailure = $i > 23;
             $isProduction = $i <= 20;
             Deployment::create([
-                'repo_name' => 'org/example-repo',
+                'repo_name' => 'local-demo/cm-activity-sim',
                 'deployment_status' => $isFailure ? 'failure' : 'success',
                 'environment' => $isProduction ? 'production' : 'staging',
                 'deployed_at' => "2026-06-" . str_pad((string)(($i % 30) + 1), 2, '0', STR_PAD_LEFT) . " 14:00:00",
@@ -194,7 +194,7 @@ class SourceSubstitutionParityTest extends TestCase
     {
         for ($i = 1; $i <= 6; $i++) {
             Release::create([
-                'repo_name' => 'org/example-repo',
+                'repo_name' => 'local-demo/cm-activity-sim',
                 'tag_name' => "v1.{$i}.0",
                 'published_at' => "2026-06-" . str_pad((string)($i * 4), 2, '0', STR_PAD_LEFT) . " 12:00:00",
                 'author_login' => 'test-author',
@@ -252,7 +252,7 @@ class SourceSubstitutionParityTest extends TestCase
         $this->seedDeployments('github_api_sync');
         $this->seedReleases('data_source', 'github_api_sync');
         $oauthUser = ['login' => 'octo-user', 'token_purpose' => 'engineering_integration'];
-        $liveResult = $this->callAggregateOutcomesByMonth(false, ['org/example-repo'], $oauthUser);
+        $liveResult = $this->callAggregateOutcomesByMonth(false, ['local-demo/cm-activity-sim'], $oauthUser);
 
         // Compare numeric fields (not provenance labels)
         $localJune = collect($localResult)->firstWhere('month', '2026-06');
@@ -283,7 +283,7 @@ class SourceSubstitutionParityTest extends TestCase
         // Live authorized — use data_source key (real sync convention)
         $this->seedReleases('data_source', 'github_api_sync');
         $oauthUser = ['login' => 'octo-user', 'token_purpose' => 'engineering_integration'];
-        $liveResult = $this->callCalculateReleaseMetrics($oauthUser, false, ['org/example-repo']);
+        $liveResult = $this->callCalculateReleaseMetrics($oauthUser, false, ['local-demo/cm-activity-sim']);
 
         $this->assertEquals($localResult['total_releases'], $liveResult['total_releases']);
         $this->assertEquals($localResult['releases_in_period'], $liveResult['releases_in_period']);
@@ -306,7 +306,7 @@ class SourceSubstitutionParityTest extends TestCase
         // Live authorized — use source key
         $this->seedReleases('source', 'github_api_sync');
         $oauthUser = ['login' => 'octo-user', 'token_purpose' => 'engineering_integration'];
-        $liveResult = $this->callCalculateReleaseMetrics($oauthUser, false, ['org/example-repo']);
+        $liveResult = $this->callCalculateReleaseMetrics($oauthUser, false, ['local-demo/cm-activity-sim']);
 
         $this->assertEquals($localResult['total_releases'], $liveResult['total_releases']);
     }
@@ -325,7 +325,7 @@ class SourceSubstitutionParityTest extends TestCase
         $liveResult = $this->callCalculateReleaseMetrics(
             ['login' => 'octo-user', 'token_purpose' => 'engineering_integration'],
             false,
-            ['org/example-repo']
+            ['local-demo/cm-activity-sim']
         );
         $this->assertEquals(0, $liveResult['total_releases']);
     }

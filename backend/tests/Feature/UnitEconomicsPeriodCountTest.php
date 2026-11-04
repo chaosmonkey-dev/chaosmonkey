@@ -54,7 +54,7 @@ class UnitEconomicsPeriodCountTest extends TestCase
         $deployments = [];
         for ($i = 0; $i < 3; $i++) {
             $deployments[] = Deployment::create([
-                'repo_name' => 'org/example-repo',
+                'repo_name' => 'local-demo/cm-activity-sim',
                 'environment' => 'production',
                 'deployment_status' => 'success',
                 'deployed_at' => $now,
@@ -65,7 +65,7 @@ class UnitEconomicsPeriodCountTest extends TestCase
         }
         for ($i = 0; $i < 2; $i++) {
             $deployments[] = Deployment::create([
-                'repo_name' => 'org/example-repo',
+                'repo_name' => 'local-demo/cm-activity-sim',
                 'environment' => 'production',
                 'deployment_status' => 'failure',
                 'deployed_at' => $now,
@@ -79,7 +79,7 @@ class UnitEconomicsPeriodCountTest extends TestCase
         $prs = [];
         for ($i = 0; $i < 2; $i++) {
             $prs[] = PullRequest::create([
-                'repo_name' => 'org/example-repo',
+                'repo_name' => 'local-demo/cm-activity-sim',
                 'pr_number' => 100 + $i,
                 'data_source' => 'cm_activity_sim',
                 'merged_at' => $now,
@@ -88,7 +88,7 @@ class UnitEconomicsPeriodCountTest extends TestCase
             ]);
         }
         $prs[] = PullRequest::create([
-            'repo_name' => 'org/example-repo',
+            'repo_name' => 'local-demo/cm-activity-sim',
             'pr_number' => 102,
             'data_source' => 'cm_activity_sim',
             'merged_at' => null,
@@ -301,7 +301,7 @@ class UnitEconomicsPeriodCountTest extends TestCase
 
         // Also seed a demo deployment (should NOT appear)
         Deployment::create([
-            'repo_name' => 'org/example-repo',
+            'repo_name' => 'local-demo/cm-activity-sim',
             'environment' => 'production',
             'deployment_status' => 'success',
             'deployed_at' => now()->subDay(),

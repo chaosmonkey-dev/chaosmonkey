@@ -309,6 +309,8 @@ class CanonicalCohortFilterTest extends TestCase
         config()->set('local_developer.local_demo_persona_invites', [
             'jordan.vega@chaosmonkey.local' => '90001',
         ]);
+        config()->set('local_developer.static_identities', ['local-developer', '4', '18269556']);
+        config()->set('local_developer.sample_persona_ids', ['90001', '90002', '90003', '90004', '90005', '90006']);
 
         $cohort = $this->createCohort('Platform');
         $personaInvite = $this->createInvite('jordan.vega@chaosmonkey.local');
@@ -329,10 +331,14 @@ class CanonicalCohortFilterTest extends TestCase
         $this->assertEquals('invite_backed_with_local_aliases', $proof['identity_resolution']);
     }
 
-    public function test_local_matt_invite_scopes_verified_local_developer_aliases(): void
+    public function test_local_operator_invite_scopes_verified_local_developer_aliases(): void
     {
+        config()->set('local_developer.static_identities', ['local-developer', '4', '18269556']);
+        config()->set('local_developer.matt_email', 'operator@example.org');
+        config()->set('local_developer.sample_persona_ids', ['90001', '90002', '90003', '90004', '90005', '90006']);
+
         $cohort = $this->createCohort('Platform');
-        $mattInvite = $this->createInvite('matt@chaosmonkey.com');
+        $mattInvite = $this->createInvite('operator@example.org');
         $this->addMember($cohort, $mattInvite);
 
         $this->createSessionEvent('4', 'vscode', $this->organizationId);
