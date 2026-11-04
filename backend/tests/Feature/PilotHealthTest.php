@@ -571,7 +571,7 @@ class PilotHealthTest extends TestCase
 
         $response->assertStatus(200);
         $response->assertJsonPath('extension.state', 'UP_TO_DATE');
-        $response->assertJsonPath('extension.expected_versions.1', '0.4.1-cc-bridge');
+        $response->assertJsonPath('extension.expected_versions.2', '0.4.2-cc-bridge');
     }
 
     // ── PILOT OPS 14-C: Installation authority parity ────────────────

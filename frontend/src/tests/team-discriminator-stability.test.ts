@@ -91,7 +91,7 @@ describe('Team discriminator stability — entity type does not change with life
 
   it('mixed roster: dashboard member + all enrollment lifecycle states coexist correctly', () => {
     const members = [
-      dashboardMember({ id: 1, name: 'Kasey' }),
+      dashboardMember({ id: 1, name: 'Member Two' }),
       dashboardMember({ id: 2, name: 'Matt' }),
       developerEnrollment({ invite_id: 10, enrollment_status: 'not_generated', has_connect_code: false, installation_count: 0 }),
       developerEnrollment({ invite_id: 11, enrollment_status: 'ready', has_connect_code: true, installation_count: 0 }),

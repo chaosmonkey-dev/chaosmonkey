@@ -102,7 +102,7 @@ class ExtensionController extends Controller
      * CR-X P1-1: Serve the canonical Claude Code bridge tarball.
      *
      * The tarball is a source-controlled immutable artifact at
-     * backend/resources/extensions/chaosmonkey-cc-bridge-0.4.1-cc-bridge.tgz
+     * backend/resources/extensions/chaosmonkey-cc-bridge-0.4.2-cc-bridge.tgz
      * (16,419 bytes, SHA-256 dcb341fe...). Served as-is from resource_path
      * so a clean checkout + normal deployment deterministically provides
      * the exact canonical artifact — no manual pre-placement required.
@@ -111,7 +111,7 @@ class ExtensionController extends Controller
      */
     public function downloadBridgeLatest()
     {
-        $filename = 'chaosmonkey-cc-bridge-0.4.1-cc-bridge.tgz';
+        $filename = 'chaosmonkey-cc-bridge-0.4.2-cc-bridge.tgz';
         $tgzPath = resource_path('extensions/' . $filename);
 
         if (!file_exists($tgzPath)) {
@@ -132,7 +132,7 @@ class ExtensionController extends Controller
      *
      * The tarball is a source-controlled immutable artifact at
      * backend/resources/extensions/chaosmonkey-codex-bridge-0.4.1-codex-bridge.tgz
-     * (SHA-256 932919a3...), produced by `npm pack` of
+     * (SHA-256 43cfda1b...), produced by `npm pack` of
      * extensions/codex-bridge. Served as-is from resource_path so a
      * clean checkout + normal deployment deterministically provides the
      * exact canonical artifact — no manual pre-placement required.

@@ -53,7 +53,7 @@ function localQualifyingReleaseInput(): CanonicalInsightInput {
       release_metrics: {
         total_releases: 6,
         releases_in_period: 6,
-        latest_release: { tag_name: 'v1.0.0', published_at: '2026-06-15T00:00:00Z', repo_name: 'mattmcclintock/cm-activity-sim' },
+        latest_release: { tag_name: 'v1.0.0', published_at: '2026-06-15T00:00:00Z', repo_name: 'local-demo/cm-activity-sim' },
       },
       outcomes_by_month: [
         {

@@ -147,7 +147,7 @@ describe('CR-X P1: PBT time filter scoping', () => {
 
     const from = '2026-08-06'
     const to = '2026-09-06'
-    const repos = ['mattmcclintock/angrymonkey']
+    const repos = ['local-demo/activity-sim']
 
     await fetchTelemetryWithAdaptiveGranularity({
       query: makeQuery(from, to, 'daily', [], repos),
@@ -163,7 +163,7 @@ describe('CR-X P1: PBT time filter scoping', () => {
     const from = '2026-06-06'
     const to = '2026-09-06'
     const developerIds = ['dev-matt']
-    const repos = ['mattmcclintock/angrymonkey']
+    const repos = ['local-demo/activity-sim']
 
     await fetchTelemetryWithAdaptiveGranularity({
       query: makeQuery(from, to, 'daily', developerIds, repos),
@@ -287,7 +287,7 @@ describe('CR-X P1: PBT time filter scoping', () => {
 
   it('Last Day composes with repo filter', async () => {
     const fetcher = vi.fn(async () => makeResult({ records: [] }))
-    const repos = ['mattmcclintock/angrymonkey']
+    const repos = ['local-demo/activity-sim']
 
     await fetchTelemetryWithAdaptiveGranularity({
       query: makeQuery('2026-09-06', '2026-09-06', 'daily', [], repos),
@@ -300,7 +300,7 @@ describe('CR-X P1: PBT time filter scoping', () => {
   it('Last Day composes with developer + repo filters', async () => {
     const fetcher = vi.fn(async () => makeResult({ records: [] }))
     const developerIds = ['dev-matt']
-    const repos = ['mattmcclintock/angrymonkey']
+    const repos = ['local-demo/activity-sim']
 
     await fetchTelemetryWithAdaptiveGranularity({
       query: makeQuery('2026-09-06', '2026-09-06', 'daily', developerIds, repos),
@@ -479,7 +479,7 @@ describe('CR-X P0: UTC midnight rollover — browser-local calendar date', () =>
   it('developer + repo filters remain composed with corrected time range', async () => {
     const fetcher = vi.fn(async () => makeResult({ records: [] }))
     const developerIds = ['dev-matt']
-    const repos = ['mattmcclintock/angrymonkey']
+    const repos = ['local-demo/activity-sim']
 
     await fetchTelemetryWithAdaptiveGranularity({
       query: makeQuery('2026-08-30', '2026-09-06', 'daily', developerIds, repos),
@@ -506,7 +506,7 @@ describe('CR-X P0: UTC midnight rollover — browser-local calendar date', () =>
   it('reporting_timezone is forwarded to the fetcher so the backend can scope by local calendar', async () => {
     const fetcher = vi.fn(async () => makeResult({ records: [] }))
     const developerIds = ['dev-matt']
-    const repos = ['mattmcclintock/angrymonkey']
+    const repos = ['local-demo/activity-sim']
     const reportingTimezone = 'America/New_York'
 
     await fetchTelemetryWithAdaptiveGranularity({

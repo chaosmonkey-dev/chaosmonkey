@@ -22,7 +22,7 @@ use Tests\TestCase;
 class CodexBridgeDownloadTest extends TestCase
 {
     private const BRIDGE_FILENAME = 'chaosmonkey-codex-bridge-0.4.1-codex-bridge.tgz';
-    private const BRIDGE_SHA256 = '932919a39a0956bf5b19f949aeca2c438700be6e95aad6794915c970e80941b1';
+    private const BRIDGE_SHA256 = '43cfda1b6767db0d18ce44cf79497e57c0f4d54eecd997852d6cc1f954274b16';
 
     /**
      * The canonical tarball must exist in the source-controlled

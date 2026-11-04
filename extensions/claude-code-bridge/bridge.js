@@ -3,7 +3,7 @@
 
 /**
  * ChaosMonkey Claude Code Terminal Bridge
- * Version: 0.4.1-cc-bridge
+ * Version: 0.4.2-cc-bridge
  *
  * PRIVACY / SECURITY CONTRACT:
  *

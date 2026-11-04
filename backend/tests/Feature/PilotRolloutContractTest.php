@@ -26,8 +26,8 @@ class PilotRolloutContractTest extends TestCase
     // ─── Canonical artifact identity (accepted release manifest) ───
     private const CANONICAL_VERSION = '0.4.1';
     private const CANONICAL_FILENAME = 'chaosmonkey-telemetry-0.4.1.vsix';
-    private const CANONICAL_SHA256 = 'b66fc8545fda619c68f9e502a7198307b00a897b991c07bb0f2b1c1291889a94';
-    private const CANONICAL_SIZE = 51657;
+    private const CANONICAL_SHA256 = '7f434439a6cfb5b0da39e10a49c7f9724c225b25d27857146076ee5a5e4c7626';
+    private const CANONICAL_SIZE = 54685;
     private const CANONICAL_ENDPOINT = '/api/extension/download/latest';
 
     protected function setUp(): void

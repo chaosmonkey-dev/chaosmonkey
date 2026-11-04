@@ -21,9 +21,9 @@ use Tests\TestCase;
  */
 class CcBridgeDownloadTest extends TestCase
 {
-    private const BRIDGE_FILENAME = 'chaosmonkey-cc-bridge-0.4.1-cc-bridge.tgz';
-    private const BRIDGE_SHA256 = 'c07a0f864f177dd1ae4286b4d4e4284fe3794cde8b7fcdd3d2d4fd910b89022f';
-    private const BRIDGE_SIZE = 16636;
+    private const BRIDGE_FILENAME = 'chaosmonkey-cc-bridge-0.4.2-cc-bridge.tgz';
+    private const BRIDGE_SHA256 = '73590be057c0c1af4d3b89f4d4e7f40223a8ccace6a28ea2cebd651ade4cb9bc';
+    private const BRIDGE_SIZE = 17934;
 
     /**
      * The canonical tarball must exist in the source-controlled

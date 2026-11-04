@@ -228,7 +228,7 @@ describe('PBT phantom workflow filter — filter context scenarios', () => {
   it('12) repo only (no developer, no workflow): no phantom chip', () => {
     const selectedWorkflow = 'compare'
     const selectedDeveloper = ''
-    const selectedRepo = 'mattmcclintock/angrymonkey'
+    const selectedRepo = 'local-demo/activity-sim'
 
     expect(shouldRenderWorkflowChip(selectedWorkflow, WORKFLOWS_3)).toBe(false)
     expect(selectedDeveloper).toBeFalsy()
@@ -238,7 +238,7 @@ describe('PBT phantom workflow filter — filter context scenarios', () => {
   it('13) developer + repo (no workflow): no phantom chip', () => {
     const selectedWorkflow = 'compare'
     const selectedDeveloper = 'matt'
-    const selectedRepo = 'mattmcclintock/angrymonkey'
+    const selectedRepo = 'local-demo/activity-sim'
 
     expect(shouldRenderWorkflowChip(selectedWorkflow, WORKFLOWS_3)).toBe(false)
   })

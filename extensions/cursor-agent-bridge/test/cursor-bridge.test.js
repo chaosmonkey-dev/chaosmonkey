@@ -133,7 +133,7 @@ const ENVELOPE = {
   generation_id: 'gen-1',
   cursor_version: '2.3.1',
   workspace_roots: null, // set per test
-  user_email: 'kasey@example.com',          // MUST be dropped
+  user_email: 'dev@example.com',          // MUST be dropped
   transcript_path: '/tmp/secret/transcript', // MUST be dropped
 };
 
@@ -195,7 +195,7 @@ async function main() {
     assert.strictEqual(m.session_id, 'sess-2');
     // privacy: scan raw body
     const raw = received[0].raw;
-    for (const bad of [SECRET, 'old_string', 'new_string', 'file_path', 'agent_message', 'user_email', 'transcript_path', 'kasey@example.com', repo]) {
+    for (const bad of [SECRET, 'old_string', 'new_string', 'file_path', 'agent_message', 'user_email', 'transcript_path', 'dev@example.com', repo]) {
       assert(!raw.includes(bad), `leakage: ${bad} found in payload`);
     }
     server.close();
@@ -310,7 +310,7 @@ async function main() {
     assert(!readState(home)['sess-5'], 'session state not cleared');
     // privacy scan
     const raw = received[0].raw;
-    for (const bad of ['user_email', 'transcript_path', 'kasey@example.com', 'agent_message', '/x/y.py', 'SECRET']) {
+    for (const bad of ['user_email', 'transcript_path', 'dev@example.com', 'agent_message', '/x/y.py', 'SECRET']) {
       assert(!raw.includes(bad), `leakage: ${bad}`);
     }
     server.close();

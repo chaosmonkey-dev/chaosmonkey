@@ -165,13 +165,13 @@ describe('CR-X PBT developer-only filtered cost — logical identity', () => {
     // Add repo info to sessions
     const sessionsWithRepo = orgSessions.map((s, i) => ({
       ...s,
-      git_repo_url: i < 60 ? 'https://github.com/mattmcclintock/angrymonkey' : 'https://github.com/other/repo',
+      git_repo_url: i < 60 ? 'https://github.com/local-demo/activity-sim' : 'https://github.com/other/repo',
     }))
 
     // When repo is also selected, the intersection must use the same
     // logical identity filter for developer AND the normalized repo filter
     const rawIds = localDeveloperRawIdentities
-    const selectedRepo = 'mattmcclintock/angrymonkey'
+    const selectedRepo = 'local-demo/activity-sim'
     const scopedRows = sessionsWithRepo.filter(s => {
       const devId = String(s.developer_id || s.user_id || '')
       // Simple normalization: extract host/path from URL

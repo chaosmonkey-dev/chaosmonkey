@@ -1074,7 +1074,7 @@ class PilotHealthController extends Controller
     private function computeExtensionHealth(int $orgId): array
     {
         // Expected versions from canonical release artifacts.
-        $expectedVersions = ['0.4.1', '0.4.1-cc-bridge'];
+        $expectedVersions = ['0.4.1', '0.4.1-cc-bridge', '0.4.2-cc-bridge'];
 
         // P0-D: Get the LATEST observed version per installation_id.
         // This prevents a legacy historical event from making a current
@@ -1117,7 +1117,7 @@ class PilotHealthController extends Controller
         foreach ($latestPerInstall as $installId => $info) {
             $version = $info['version'];
             $isBridge = str_contains($version, 'cc-bridge');
-            $canonical = $isBridge ? '0.4.1-cc-bridge' : '0.4.1';
+            $canonical = $isBridge ? '0.4.2-cc-bridge' : '0.4.1';
 
             $status = version_compare($version, $canonical, '>=') ? 'CURRENT' : 'OUTDATED';
             if ($status === 'CURRENT') $current++;

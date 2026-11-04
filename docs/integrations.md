@@ -23,7 +23,7 @@ they can also be fetched directly:
 Captures editor activity, AI suggestion events, and session boundaries.
 Distinct source: `vscode` / `cursor`.
 
-## Claude Code bridge (0.4.1-cc-bridge)
+## Claude Code bridge (0.4.2-cc-bridge)
 
 Terminal bridge that reports Claude Code sessions.
 

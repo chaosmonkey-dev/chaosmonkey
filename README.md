@@ -59,7 +59,7 @@ restore, upgrades, and environment configuration.
 | Tool | Client | Package version | Status |
 |---|---|---|---|
 | VS Code / Cursor IDE | `extensions/chaosmonkey-telemetry` (VSIX) | 0.4.1 | Shipped; production-observed |
-| Claude Code | `extensions/claude-code-bridge` | 0.4.1-cc-bridge | Shipped; production-observed |
+| Claude Code | `extensions/claude-code-bridge` | 0.4.2-cc-bridge | Shipped; production-observed |
 | Cursor Agents Window | `extensions/cursor-agent-bridge` | 0.4.2-cursor-bridge | Shipped; production-observed |
 | Codex CLI | `extensions/codex-bridge` | 0.4.1-codex-bridge | Shipped; production-observed |
 | GitHub OAuth | backend | — | Optional; self-configured |

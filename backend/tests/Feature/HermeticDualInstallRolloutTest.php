@@ -3,7 +3,7 @@
  * CR-X Hermetic Same-Code Dual-Install Rollout Gauntlet
  *
  * Proves the complete user journey: ONE developer, ONE still-valid connect
- * code, TWO distinct installations (IDE 0.4.1 + Claude Code bridge 0.4.1-cc-bridge).
+ * code, TWO distinct installations (IDE 0.4.1 + Claude Code bridge 0.4.2-cc-bridge).
  *
  * Runs entirely on :memory: SQLite — never touches a real local database
  * or any production environment.
@@ -254,7 +254,7 @@ class HermeticDualInstallRolloutTest extends TestCase
         $response = $this->sendTelemetry($token, $installId, [
             'source' => 'claude_code',
             'editor_source' => 'claude_code',
-            'extension_version' => '0.4.1-cc-bridge',
+            'extension_version' => '0.4.2-cc-bridge',
         ]);
 
         $this->assertEquals(200, $response->status(), "Bridge telemetry should succeed: {$response->content()}");
@@ -287,7 +287,7 @@ class HermeticDualInstallRolloutTest extends TestCase
         $this->sendTelemetry($tokenB, $installB, [
             'source' => 'claude_code',
             'editor_source' => 'claude_code',
-            'extension_version' => '0.4.1-cc-bridge',
+            'extension_version' => '0.4.2-cc-bridge',
         ]);
 
         $eventA = TelemetryEvent::where('source', 'cursor')->first();
@@ -456,7 +456,7 @@ class HermeticDualInstallRolloutTest extends TestCase
 
         $hash = hash_file('sha256', $vsixPath);
         $this->assertEquals(
-            'b66fc8545fda619c68f9e502a7198307b00a897b991c07bb0f2b1c1291889a94',
+            '7f434439a6cfb5b0da39e10a49c7f9724c225b25d27857146076ee5a5e4c7626',
             $hash,
             'IDE VSIX SHA-256 must match frozen artifact'
         );
@@ -464,12 +464,12 @@ class HermeticDualInstallRolloutTest extends TestCase
 
     public function test_frozen_bridge_tgz_artifact_exists(): void
     {
-        $tgzPath = resource_path('extensions/chaosmonkey-cc-bridge-0.4.1-cc-bridge.tgz');
-        $this->assertFileExists($tgzPath, 'Bridge tarball 0.4.1-cc-bridge must exist in backend resources');
+        $tgzPath = resource_path('extensions/chaosmonkey-cc-bridge-0.4.2-cc-bridge.tgz');
+        $this->assertFileExists($tgzPath, 'Bridge tarball 0.4.2-cc-bridge must exist in backend resources');
 
         $hash = hash_file('sha256', $tgzPath);
         $this->assertEquals(
-            'c07a0f864f177dd1ae4286b4d4e4284fe3794cde8b7fcdd3d2d4fd910b89022f',
+            '73590be057c0c1af4d3b89f4d4e7f40223a8ccace6a28ea2cebd651ade4cb9bc',
             $hash,
             'Bridge tarball SHA-256 must match frozen artifact'
         );

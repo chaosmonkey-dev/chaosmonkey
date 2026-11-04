@@ -1,7 +1,7 @@
 # ChaosMonkey Claude Code Bridge — Quickstart
 
-**Version:** 0.4.1-cc-bridge  
-**Artifact:** `chaosmonkey-cc-bridge-0.4.1-cc-bridge.tgz`  
+**Version:** 0.4.2-cc-bridge  
+**Artifact:** `chaosmonkey-cc-bridge-0.4.2-cc-bridge.tgz`  
 **SHA-256:** `c07a0f864f177dd1ae4286b4d4e4284fe3794cde8b7fcdd3d2d4fd910b89022f`
 
 ---
@@ -22,7 +22,7 @@ distinct editor installations while it remains valid.
 ## 3. Verify the tarball
 
 ```bash
-shasum -a 256 chaosmonkey-cc-bridge-0.4.1-cc-bridge.tgz
+shasum -a 256 chaosmonkey-cc-bridge-0.4.2-cc-bridge.tgz
 ```
 
 Expected: `c07a0f864f177dd1ae4286b4d4e4284fe3794cde8b7fcdd3d2d4fd910b89022f`
@@ -32,7 +32,7 @@ If the hash does not match, do not proceed.
 ## 4. Extract
 
 ```bash
-tar -xzf chaosmonkey-cc-bridge-0.4.1-cc-bridge.tgz
+tar -xzf chaosmonkey-cc-bridge-0.4.2-cc-bridge.tgz
 cd package
 ```
 

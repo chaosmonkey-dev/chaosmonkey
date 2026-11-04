@@ -106,10 +106,10 @@ describe('CR-X Gate A (reopened): Cost-authority contract', () => {
   })
 
   it('normalizeRepoUrl matches canonical IDs from raw URLs', () => {
-    expect(normalizeRepoUrl('https://github.com/mattmcclintock/angrymonkey')).toBe('mattmcclintock/angrymonkey')
-    expect(normalizeRepoUrl('https://github.com/mattmcclintock/angrymonkey.git')).toBe('mattmcclintock/angrymonkey')
-    expect(normalizeRepoUrl('git@github.com:mattmcclintock/angrymonkey.git')).toBe('mattmcclintock/angrymonkey')
-    expect(normalizeRepoUrl('mattmcclintock/angrymonkey')).toBe('mattmcclintock/angrymonkey')
+    expect(normalizeRepoUrl('https://github.com/local-demo/activity-sim')).toBe('local-demo/activity-sim')
+    expect(normalizeRepoUrl('https://github.com/local-demo/activity-sim.git')).toBe('local-demo/activity-sim')
+    expect(normalizeRepoUrl('git@github.com:local-demo/activity-sim.git')).toBe('local-demo/activity-sim')
+    expect(normalizeRepoUrl('local-demo/activity-sim')).toBe('local-demo/activity-sim')
     expect(normalizeRepoUrl(null)).toBeNull()
     expect(normalizeRepoUrl('')).toBeNull()
   })

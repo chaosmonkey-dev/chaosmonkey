@@ -1,6 +1,6 @@
 # ChaosMonkey Claude Code Bridge
 
-**Version:** 0.4.1-cc-bridge
+**Version:** 0.4.2-cc-bridge
 
 A Node.js bridge that sends pseudonymous coding telemetry from Claude Code
 (terminal) to a ChaosMonkey backend. It is **not** a VS Code extension — it
@@ -16,7 +16,7 @@ runs as a set of Claude Code hooks.
 
 ## Recipient Installation (from distributed tarball)
 
-If you received `chaosmonkey-cc-bridge-0.4.1-cc-bridge.tgz`, follow these
+If you received `chaosmonkey-cc-bridge-0.4.2-cc-bridge.tgz`, follow these
 steps. You do **not** need the ChaosMonkey source repository.
 
 ### 1. Verify the tarball SHA-256
@@ -24,7 +24,7 @@ steps. You do **not** need the ChaosMonkey source repository.
 Before extracting, verify the tarball has not been tampered with:
 
 ```bash
-shasum -a 256 chaosmonkey-cc-bridge-0.4.1-cc-bridge.tgz
+shasum -a 256 chaosmonkey-cc-bridge-0.4.2-cc-bridge.tgz
 ```
 
 Compare the output against the published SHA-256 value for this release
@@ -34,7 +34,7 @@ match, do not proceed.
 ### 2. Extract the tarball
 
 ```bash
-tar -xzf chaosmonkey-cc-bridge-0.4.1-cc-bridge.tgz
+tar -xzf chaosmonkey-cc-bridge-0.4.2-cc-bridge.tgz
 cd package
 ```
 
@@ -51,7 +51,7 @@ This extracts the bridge files into a `package/` directory containing:
 shasum -a 256 bridge.js install.js uninstall.js
 ```
 
-Expected values for version 0.4.1-cc-bridge:
+Expected values for version 0.4.2-cc-bridge:
 
 ```
 ee472efc164642ddcac3170f8dcb69ce771baacd68c6a7b7c817d62580cd2720  bridge.js
@@ -121,7 +121,7 @@ cd extensions/claude-code-bridge
 npm pack
 ```
 
-This produces `chaosmonkey-cc-bridge-0.4.1-cc-bridge.tgz`.
+This produces `chaosmonkey-cc-bridge-0.4.2-cc-bridge.tgz`.
 
 ### Verify source file SHA-256
 
