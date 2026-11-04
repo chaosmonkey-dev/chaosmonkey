@@ -76,7 +76,7 @@ class GitHubReliabilityHardeningTest extends TestCase
             'access_token' => 'gho_identityWithRepoScope',
             'user_data' => json_encode([
                 'token_purpose' => 'identity_only',
-                'login' => 'mattmcclintock',
+                'login' => 'octo-user',
                 'scope' => 'read:user,user:email,repo',
                 'repositories' => ['acme/widgets'],
             ]),

@@ -13,7 +13,9 @@ RUN npm run build
 # ---------------------------------------------------------------------------
 # Stage 2: composer dependencies (production only)
 # ---------------------------------------------------------------------------
-FROM composer:2 AS vendor
+FROM php:8.2-cli-alpine AS vendor
+RUN apk add --no-cache git unzip
+COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 WORKDIR /build/backend
 COPY backend/composer.json backend/composer.lock ./
 RUN composer install \
@@ -31,6 +33,7 @@ FROM php:8.2-fpm-alpine AS app
 RUN apk add --no-cache \
       nginx \
       sqlite \
+      sqlite-dev \
       tzdata \
     && docker-php-ext-install pdo_sqlite opcache
 

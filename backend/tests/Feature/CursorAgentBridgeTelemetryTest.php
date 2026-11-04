@@ -55,7 +55,7 @@ class CursorAgentBridgeTelemetryTest extends TestCase
     private function enrollBridgeInstallation(string $installationId = '550e8400-e29b-41d4-a716-446655440201'): array
     {
         $response = $this->postJson('/api/org/invites', [
-            'email' => 'kasey-fixture@test.com',
+            'email' => 'agent-fixture@test.com',
             'role' => 'member',
             'send_email' => false,
             'purpose' => 'developer_enrollment',

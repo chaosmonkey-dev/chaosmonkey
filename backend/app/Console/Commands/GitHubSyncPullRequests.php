@@ -20,7 +20,7 @@ class GitHubSyncPullRequests extends Command
      * @var string
      */
     protected $signature = 'github:sync-prs 
-                            {--repo= : Full repo name (e.g., mattmcclintock/cm-activity-sim)}
+                            {--repo= : Full repo name (e.g., org/example-repo)}
                             {--state=all : PR state to fetch (all, open, closed)}
                             {--per_page=100 : Items per page (max 100)}
                             {--max_pages=10 : Maximum pages to fetch (0 for unlimited)}

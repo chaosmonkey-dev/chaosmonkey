@@ -119,7 +119,7 @@ class MetricsProvenanceTest extends TestCase
     public function test_week_with_fixture_returns_expected_pr_count()
     {
         PullRequest::create([
-            'repo_name' => 'mattmcclintock/cm-activity-sim',
+            'repo_name' => 'org/example-repo',
             'pr_number' => 101,
             'data_source' => 'cm_activity_sim',
             'merged_at' => now(),
@@ -127,7 +127,7 @@ class MetricsProvenanceTest extends TestCase
             'updated_at' => now(),
         ]);
         PullRequest::create([
-            'repo_name' => 'mattmcclintock/cm-activity-sim',
+            'repo_name' => 'org/example-repo',
             'pr_number' => 102,
             'data_source' => 'cm_activity_sim',
             'merged_at' => now(),
@@ -143,21 +143,21 @@ class MetricsProvenanceTest extends TestCase
     public function test_week_with_fixture_returns_expected_deployment_counts()
     {
         Deployment::create([
-            'repo_name' => 'mattmcclintock/cm-activity-sim',
+            'repo_name' => 'org/example-repo',
             'deployment_status' => 'success',
             'deployed_at' => now(),
             'created_at' => now(),
             'updated_at' => now(),
         ]);
         Deployment::create([
-            'repo_name' => 'mattmcclintock/cm-activity-sim',
+            'repo_name' => 'org/example-repo',
             'deployment_status' => 'success',
             'deployed_at' => now(),
             'created_at' => now(),
             'updated_at' => now(),
         ]);
         Deployment::create([
-            'repo_name' => 'mattmcclintock/cm-activity-sim',
+            'repo_name' => 'org/example-repo',
             'deployment_status' => 'failure',
             'deployed_at' => now(),
             'created_at' => now(),
@@ -175,7 +175,7 @@ class MetricsProvenanceTest extends TestCase
     public function test_all_time_with_fixture_provenance_source_is_cm_activity_sim()
     {
         Deployment::create([
-            'repo_name' => 'mattmcclintock/cm-activity-sim',
+            'repo_name' => 'org/example-repo',
             'deployment_status' => 'success',
             'deployed_at' => now()->subDays(5),
             'metadata' => ['source' => 'cm_activity_sim', 'data_source' => 'seeded'],
@@ -211,7 +211,7 @@ class MetricsProvenanceTest extends TestCase
 
         // Insert PR data with cm_activity_sim (Local Lab fallback)
         PullRequest::create([
-            'repo_name' => 'mattmcclintock/cm-activity-sim',
+            'repo_name' => 'org/example-repo',
             'pr_number' => 201,
             'data_source' => 'cm_activity_sim',
             'merged_at' => now(),
@@ -250,7 +250,7 @@ class MetricsProvenanceTest extends TestCase
         config(['app.env' => 'testing']);
 
         PullRequest::create([
-            'repo_name' => 'mattmcclintock/cm-activity-sim',
+            'repo_name' => 'org/example-repo',
             'pr_number' => 301,
             'data_source' => 'cm_activity_sim',
             'merged_at' => now(),

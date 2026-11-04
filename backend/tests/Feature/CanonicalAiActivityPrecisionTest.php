@@ -130,7 +130,7 @@ class CanonicalAiActivityPrecisionTest extends TestCase
         $this->assertEquals(1.0, $rows[0]['ai_suggestions_accepted']);
     }
 
-    public function test_patra_shaped_data_no_longer_displays_zero(): void
+    public function test_sparse_org_data_no_longer_displays_zero(): void
     {
         // Production tenant week-41 shape: invite:3=148 sessions/115 bursts, invite:6=39/19,
         // invite:17=2/16 — scaled down 10x preserving fractional averages.

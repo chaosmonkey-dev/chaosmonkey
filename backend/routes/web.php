@@ -23,4 +23,4 @@ Route::get('/{any?}', function () {
         return response()->file($htmlPath);
     }
     return response()->json(['error' => 'Frontend not found'], 404);
-})->where('any', '^(?!api|test).*$');
+})->where('any', '^(?!api|test|up).*$');

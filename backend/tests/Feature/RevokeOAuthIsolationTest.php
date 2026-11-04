@@ -24,8 +24,8 @@ class RevokeOAuthIsolationTest extends TestCase
         parent::setUp();
 
         $this->org = Organization::create([
-            'name' => 'Patra Pilot',
-            'slug' => 'patra-pilot-' . Str::random(6),
+            'name' => 'Acme Pilot',
+            'slug' => 'acme-pilot-' . Str::random(6),
         ]);
 
         // User A: support-style user (Matt)
@@ -40,8 +40,8 @@ class RevokeOAuthIsolationTest extends TestCase
 
         // User B: second-tenant authority
         $this->userB = User::create([
-            'name' => 'Patra Authority',
-            'email' => 'patra@test.com',
+            'name' => 'Acme Authority',
+            'email' => 'acme@test.com',
             'password' => bcrypt('password'),
             'github_id' => 99999999,
             'organization_id' => $this->org->id,
@@ -54,7 +54,7 @@ class RevokeOAuthIsolationTest extends TestCase
                 'user_id' => $this->userA->id,
                 'access_token' => 'token-A-' . Str::random(32),
                 'organization_id' => $this->org->id,
-                'user_data' => json_encode(['login' => 'mattmcclintock', 'id' => 18269556]),
+                'user_data' => json_encode(['login' => 'octo-user', 'id' => 18269556]),
                 'created_at' => now(),
                 'updated_at' => now(),
             ],
@@ -62,7 +62,7 @@ class RevokeOAuthIsolationTest extends TestCase
                 'user_id' => $this->userB->id,
                 'access_token' => 'token-B-' . Str::random(32),
                 'organization_id' => $this->org->id,
-                'user_data' => json_encode(['login' => 'patra-authority', 'id' => 99999999]),
+                'user_data' => json_encode(['login' => 'acme-authority', 'id' => 99999999]),
                 'created_at' => now(),
                 'updated_at' => now(),
             ],

@@ -63,7 +63,7 @@ class GitHubRealismSeeder extends Seeder
                 'pr_reopened_count' => 0,
             ],
             [
-                'repo_name' => 'mattmcclintock/angryMonkey',
+                'repo_name' => 'example-org/chaosmonkey',
                 'pr_number' => 102,
                 'developer_id' => 'sarah.rodriguez',
                 'user_login' => 'sarahrodriguez',
@@ -105,7 +105,7 @@ class GitHubRealismSeeder extends Seeder
                 'pr_reopened_count' => 0,
             ],
             [
-                'repo_name' => 'mattmcclintock/ChaosMonkey.dev',
+                'repo_name' => 'example-org/chaosmonkey-dev',
                 'pr_number' => 104,
                 'developer_id' => 'riley.park',
                 'user_login' => 'rileypark',
@@ -126,7 +126,7 @@ class GitHubRealismSeeder extends Seeder
                 'pr_reopened_count' => 1,
             ],
             [
-                'repo_name' => 'mattmcclintock/cm-activity-sim',
+                'repo_name' => 'example-org/activity-sim',
                 'pr_number' => 105,
                 'developer_id' => 'jordan.taylor',
                 'user_login' => 'jordantaylor',
@@ -168,7 +168,7 @@ class GitHubRealismSeeder extends Seeder
                 'pr_reopened_count' => 0,
             ],
             [
-                'repo_name' => 'mattmcclintock/angryMonkey',
+                'repo_name' => 'example-org/chaosmonkey',
                 'pr_number' => 107,
                 'developer_id' => 'chris.walker',
                 'user_login' => 'chriswalker',
@@ -189,7 +189,7 @@ class GitHubRealismSeeder extends Seeder
                 'pr_reopened_count' => 0,
             ],
             [
-                'repo_name' => 'mattmcclintock/ChaosMonkey.dev',
+                'repo_name' => 'example-org/chaosmonkey-dev',
                 'pr_number' => 108,
                 'developer_id' => 'alex.chen',
                 'user_login' => 'alexchen',
@@ -231,7 +231,7 @@ class GitHubRealismSeeder extends Seeder
                 'pr_reopened_count' => 0,
             ],
             [
-                'repo_name' => 'mattmcclintock/cm-activity-sim',
+                'repo_name' => 'example-org/activity-sim',
                 'pr_number' => 110,
                 'developer_id' => 'marcus.kim',
                 'user_login' => 'marcuskim',
@@ -275,7 +275,7 @@ class GitHubRealismSeeder extends Seeder
         
         // Update some existing PRs with varied developers
         DB::table('pull_requests')
-            ->where('developer_id', 'mattmcclintock')
+            ->where('developer_id', 'octo-user')
             ->limit(15)
             ->inRandomOrder()
             ->update([
@@ -354,7 +354,7 @@ class GitHubRealismSeeder extends Seeder
     {
         // Add a rollback deployment
         DB::table('deployments')->insert([
-            'repo_name' => 'mattmcclintock/angryMonkey',
+            'repo_name' => 'example-org/chaosmonkey',
             'environment' => 'production',
             'deployment_status' => 'success',
             'deployed_at' => Carbon::now()->subDays(1)->subHours(3),
@@ -407,7 +407,7 @@ class GitHubRealismSeeder extends Seeder
         
         // Add a hotfix deployment sequence
         DB::table('deployments')->insert([
-            'repo_name' => 'mattmcclintock/ChaosMonkey.dev',
+            'repo_name' => 'example-org/chaosmonkey-dev',
             'environment' => 'production',
             'deployment_status' => 'success',
             'deployed_at' => Carbon::now()->subHours(6),

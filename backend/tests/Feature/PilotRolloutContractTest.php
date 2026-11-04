@@ -327,8 +327,8 @@ class PilotRolloutContractTest extends TestCase
         $this->assertArrayHasKey('setup', $body);
         $this->assertEquals('http://runtime-tenant-test:9999', $body['setup']['api_base_url'],
             'api_base_url must derive from config(app.url), not a hardcoded hostname');
-        $this->assertStringNotContainsString('prioritydispatch', $body['setup']['api_base_url'],
-            'api_base_url must not contain prioritydispatch (no tenant hardcode)');
+        $this->assertStringNotContainsString('example-tenant', $body['setup']['api_base_url'],
+            'api_base_url must not contain tenant slug (no tenant hardcode)');
     }
 
     /**

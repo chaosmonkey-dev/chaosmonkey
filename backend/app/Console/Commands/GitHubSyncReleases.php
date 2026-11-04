@@ -17,7 +17,7 @@ class GitHubSyncReleases extends Command
      * @var string
      */
     protected $signature = 'github:sync-releases
-                            {--repo= : Full repo name (e.g., mattmcclintock/cm-activity-sim)}
+                            {--repo= : Full repo name (e.g., example-org/activity-sim)}
                             {--per_page=100 : Items per page (max 100)}
                             {--max_pages=10 : Maximum pages to fetch (0 for unlimited)}
                             {--since= : Only releases published since this date (YYYY-MM-DD)}';

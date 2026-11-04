@@ -6,7 +6,7 @@ they can also be fetched directly:
 
 | Endpoint | Artifact |
 |---|---|
-| `GET /api/chaosmonkey-telemetry/download/latest` | VS Code/Cursor VSIX |
+| `GET /api/extension/download/latest` | VS Code/Cursor VSIX |
 | `GET /api/bridge/download/latest` | Claude Code bridge (tgz) |
 | `GET /api/cursor-agent-bridge/download/latest` | Cursor Agents bridge (tgz) |
 | `GET /api/codex-bridge/download/latest` | Codex bridge (tgz) |

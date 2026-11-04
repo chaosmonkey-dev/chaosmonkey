@@ -530,8 +530,8 @@ class OAuthIntentScopesTest extends TestCase
     public function test_existing_authorized_github_user_can_still_login_in_pilot_mode(): void
     {
         // Given the configured pilot org and an existing user
-        $pilotOrg = Organization::create(['name' => 'Priority Dispatch', 'slug' => 'pd-pilot']);
-        config(['services.pilot.single_tenant_org_slug' => 'pd-pilot']);
+        $pilotOrg = Organization::create(['name' => 'Example Org', 'slug' => 'example-org']);
+        config(['services.pilot.single_tenant_org_slug' => 'example-org']);
 
         $existingUser = User::create([
             'name' => 'Ed St. Louis',
@@ -571,8 +571,8 @@ class OAuthIntentScopesTest extends TestCase
 
     public function test_unknown_github_user_cannot_create_pilot_user_without_invite(): void
     {
-        Organization::create(['name' => 'Priority Dispatch', 'slug' => 'pd-pilot']);
-        config(['services.pilot.single_tenant_org_slug' => 'pd-pilot']);
+        Organization::create(['name' => 'Example Org', 'slug' => 'example-org']);
+        config(['services.pilot.single_tenant_org_slug' => 'example-org']);
 
         $state = $this->getRedirectState();
         Http::fake([
@@ -601,8 +601,8 @@ class OAuthIntentScopesTest extends TestCase
 
     public function test_unknown_github_user_cannot_obtain_dashboard_token_without_invite(): void
     {
-        Organization::create(['name' => 'Priority Dispatch', 'slug' => 'pd-pilot']);
-        config(['services.pilot.single_tenant_org_slug' => 'pd-pilot']);
+        Organization::create(['name' => 'Example Org', 'slug' => 'example-org']);
+        config(['services.pilot.single_tenant_org_slug' => 'example-org']);
 
         $state = $this->getRedirectState();
         Http::fake([
@@ -631,8 +631,8 @@ class OAuthIntentScopesTest extends TestCase
 
     public function test_valid_dashboard_invite_admits_user_to_pilot_org_as_member(): void
     {
-        $pilotOrg = Organization::create(['name' => 'Priority Dispatch', 'slug' => 'pd-pilot']);
-        config(['services.pilot.single_tenant_org_slug' => 'pd-pilot']);
+        $pilotOrg = Organization::create(['name' => 'Example Org', 'slug' => 'example-org']);
+        config(['services.pilot.single_tenant_org_slug' => 'example-org']);
 
         // Create a dashboard-user invite (no connect code)
         $inviteToken = Str::random(32);
@@ -678,8 +678,8 @@ class OAuthIntentScopesTest extends TestCase
 
     public function test_dashboard_invite_can_admit_admin_to_pilot_org(): void
     {
-        $pilotOrg = Organization::create(['name' => 'Priority Dispatch', 'slug' => 'pd-pilot']);
-        config(['services.pilot.single_tenant_org_slug' => 'pd-pilot']);
+        $pilotOrg = Organization::create(['name' => 'Example Org', 'slug' => 'example-org']);
+        config(['services.pilot.single_tenant_org_slug' => 'example-org']);
 
         $inviteToken = Str::random(32);
         DB::table('invites')->insert([
@@ -720,8 +720,8 @@ class OAuthIntentScopesTest extends TestCase
 
     public function test_developer_enrollment_invite_cannot_grant_dashboard_access(): void
     {
-        $pilotOrg = Organization::create(['name' => 'Priority Dispatch', 'slug' => 'pd-pilot']);
-        config(['services.pilot.single_tenant_org_slug' => 'pd-pilot']);
+        $pilotOrg = Organization::create(['name' => 'Example Org', 'slug' => 'example-org']);
+        config(['services.pilot.single_tenant_org_slug' => 'example-org']);
 
         $inviteToken = Str::random(32);
         $inviteId = DB::table('invites')->insertGetId([
@@ -771,8 +771,8 @@ class OAuthIntentScopesTest extends TestCase
 
     public function test_pilot_mode_does_not_create_stray_organization_on_unknown_login(): void
     {
-        Organization::create(['name' => 'Priority Dispatch', 'slug' => 'pd-pilot']);
-        config(['services.pilot.single_tenant_org_slug' => 'pd-pilot']);
+        Organization::create(['name' => 'Example Org', 'slug' => 'example-org']);
+        config(['services.pilot.single_tenant_org_slug' => 'example-org']);
 
         $state = $this->getRedirectState();
         Http::fake([

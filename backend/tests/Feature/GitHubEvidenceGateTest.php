@@ -145,7 +145,7 @@ class GitHubEvidenceGateTest extends TestCase
     /**
      * Insert an oauth_tokens row with a given token_purpose.
      */
-    private function insertOAuthToken(?string $purpose, ?string $login = 'mattmcclintock'): string
+    private function insertOAuthToken(?string $purpose, ?string $login = 'octo-user'): string
     {
         $token = 'gho_test_' . Str::random(16);
         $userData = [
@@ -176,7 +176,7 @@ class GitHubEvidenceGateTest extends TestCase
     public function test_identity_only_token_is_not_eligible(): void
     {
         $this->assertFalse($this->callEligible([
-            'login' => 'mattmcclintock',
+            'login' => 'octo-user',
             'token_purpose' => 'identity_only',
         ]));
     }
@@ -184,14 +184,14 @@ class GitHubEvidenceGateTest extends TestCase
     public function test_missing_purpose_is_not_eligible(): void
     {
         $this->assertFalse($this->callEligible([
-            'login' => 'mattmcclintock',
+            'login' => 'octo-user',
         ]));
     }
 
     public function test_null_purpose_is_not_eligible(): void
     {
         $this->assertFalse($this->callEligible([
-            'login' => 'mattmcclintock',
+            'login' => 'octo-user',
             'token_purpose' => null,
         ]));
     }
@@ -199,7 +199,7 @@ class GitHubEvidenceGateTest extends TestCase
     public function test_unknown_purpose_is_not_eligible(): void
     {
         $this->assertFalse($this->callEligible([
-            'login' => 'mattmcclintock',
+            'login' => 'octo-user',
             'token_purpose' => 'unknown',
         ]));
     }
@@ -207,7 +207,7 @@ class GitHubEvidenceGateTest extends TestCase
     public function test_legacy_purpose_is_not_eligible(): void
     {
         $this->assertFalse($this->callEligible([
-            'login' => 'mattmcclintock',
+            'login' => 'octo-user',
             'token_purpose' => 'legacy',
         ]));
     }
@@ -215,7 +215,7 @@ class GitHubEvidenceGateTest extends TestCase
     public function test_engineering_integration_is_eligible(): void
     {
         $this->assertTrue($this->callEligible([
-            'login' => 'mattmcclintock',
+            'login' => 'octo-user',
             'token_purpose' => 'engineering_integration',
         ]));
     }
@@ -236,7 +236,7 @@ class GitHubEvidenceGateTest extends TestCase
     {
         // Even if a user has public_repos=3, identity_only must block evidence.
         $this->assertFalse($this->callEligible([
-            'login' => 'mattmcclintock',
+            'login' => 'octo-user',
             'token_purpose' => 'identity_only',
             'public_repos' => 3,
         ]));

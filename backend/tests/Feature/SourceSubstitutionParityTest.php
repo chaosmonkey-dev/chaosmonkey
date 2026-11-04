@@ -149,7 +149,7 @@ class SourceSubstitutionParityTest extends TestCase
         for ($i = 1; $i <= 27; $i++) {
             $merged = $i <= 18;
             PullRequest::create([
-                'repo_name' => 'mattmcclintock/cm-activity-sim',
+                'repo_name' => 'org/example-repo',
                 'pr_number' => $i,
                 'developer_id' => 'dev1',
                 'merged_at' => $merged ? "2026-06-{$i} 12:00:00" : null,
@@ -174,7 +174,7 @@ class SourceSubstitutionParityTest extends TestCase
             $isFailure = $i > 23;
             $isProduction = $i <= 20;
             Deployment::create([
-                'repo_name' => 'mattmcclintock/cm-activity-sim',
+                'repo_name' => 'org/example-repo',
                 'deployment_status' => $isFailure ? 'failure' : 'success',
                 'environment' => $isProduction ? 'production' : 'staging',
                 'deployed_at' => "2026-06-" . str_pad((string)(($i % 30) + 1), 2, '0', STR_PAD_LEFT) . " 14:00:00",
@@ -194,7 +194,7 @@ class SourceSubstitutionParityTest extends TestCase
     {
         for ($i = 1; $i <= 6; $i++) {
             Release::create([
-                'repo_name' => 'mattmcclintock/cm-activity-sim',
+                'repo_name' => 'org/example-repo',
                 'tag_name' => "v1.{$i}.0",
                 'published_at' => "2026-06-" . str_pad((string)($i * 4), 2, '0', STR_PAD_LEFT) . " 12:00:00",
                 'author_login' => 'test-author',
@@ -251,8 +251,8 @@ class SourceSubstitutionParityTest extends TestCase
         $this->seedPRs('github_api_sync');
         $this->seedDeployments('github_api_sync');
         $this->seedReleases('data_source', 'github_api_sync');
-        $oauthUser = ['login' => 'mattmcclintock', 'token_purpose' => 'engineering_integration'];
-        $liveResult = $this->callAggregateOutcomesByMonth(false, ['mattmcclintock/cm-activity-sim'], $oauthUser);
+        $oauthUser = ['login' => 'octo-user', 'token_purpose' => 'engineering_integration'];
+        $liveResult = $this->callAggregateOutcomesByMonth(false, ['org/example-repo'], $oauthUser);
 
         // Compare numeric fields (not provenance labels)
         $localJune = collect($localResult)->firstWhere('month', '2026-06');
@@ -282,8 +282,8 @@ class SourceSubstitutionParityTest extends TestCase
 
         // Live authorized — use data_source key (real sync convention)
         $this->seedReleases('data_source', 'github_api_sync');
-        $oauthUser = ['login' => 'mattmcclintock', 'token_purpose' => 'engineering_integration'];
-        $liveResult = $this->callCalculateReleaseMetrics($oauthUser, false, ['mattmcclintock/cm-activity-sim']);
+        $oauthUser = ['login' => 'octo-user', 'token_purpose' => 'engineering_integration'];
+        $liveResult = $this->callCalculateReleaseMetrics($oauthUser, false, ['org/example-repo']);
 
         $this->assertEquals($localResult['total_releases'], $liveResult['total_releases']);
         $this->assertEquals($localResult['releases_in_period'], $liveResult['releases_in_period']);
@@ -305,8 +305,8 @@ class SourceSubstitutionParityTest extends TestCase
 
         // Live authorized — use source key
         $this->seedReleases('source', 'github_api_sync');
-        $oauthUser = ['login' => 'mattmcclintock', 'token_purpose' => 'engineering_integration'];
-        $liveResult = $this->callCalculateReleaseMetrics($oauthUser, false, ['mattmcclintock/cm-activity-sim']);
+        $oauthUser = ['login' => 'octo-user', 'token_purpose' => 'engineering_integration'];
+        $liveResult = $this->callCalculateReleaseMetrics($oauthUser, false, ['org/example-repo']);
 
         $this->assertEquals($localResult['total_releases'], $liveResult['total_releases']);
     }
@@ -323,9 +323,9 @@ class SourceSubstitutionParityTest extends TestCase
         $this->assertNull($localResult['latest_release']);
 
         $liveResult = $this->callCalculateReleaseMetrics(
-            ['login' => 'mattmcclintock', 'token_purpose' => 'engineering_integration'],
+            ['login' => 'octo-user', 'token_purpose' => 'engineering_integration'],
             false,
-            ['mattmcclintock/cm-activity-sim']
+            ['org/example-repo']
         );
         $this->assertEquals(0, $liveResult['total_releases']);
     }
