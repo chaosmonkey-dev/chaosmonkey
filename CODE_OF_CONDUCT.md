@@ -21,8 +21,10 @@ identity, or background.
 
 ## Enforcement
 
-Report conduct issues to **conduct@chaosmonkey.dev**. Maintainers will review
-and may warn, moderate, or ban participants whose behavior violates this code.
-Maintainers' decisions on enforcement are final.
+Report conduct issues privately to the repository maintainers via GitHub (open a
+confidential report through the maintainer's profile or the repository's
+security advisory channel). Maintainers will review and may warn, moderate, or
+ban participants whose behavior violates this code. Maintainers' decisions on
+enforcement are final.
 
 Adapted from the Contributor Covenant, version 2.1.

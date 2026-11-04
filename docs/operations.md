@@ -70,8 +70,10 @@ docker logs -f chaosmonkey
 
 ## Telemetry retention
 
-`TELEMETRY_RETENTION_DAYS` (default 90) controls pruning of raw telemetry
-events. Derived session aggregates are retained.
+There is no automatic pruning. Telemetry events are kept until you delete
+them — an authenticated admin can clear telemetry via `POST /api/clear-data`,
+or operate directly on the SQLite file in `/data`. Plan your own retention
+policy (e.g. scheduled export + clear) if you need bounded growth.
 
 ## Troubleshooting
 

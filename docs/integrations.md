@@ -25,14 +25,23 @@ Distinct source: `vscode` / `cursor`.
 
 ## Claude Code bridge (0.4.2-cc-bridge)
 
-Terminal bridge that reports Claude Code sessions.
+Terminal bridge that reports Claude Code sessions. Requires Node.js >= 18.
 
 ```bash
 npm install -g <downloaded tgz>
-chaosmonkey-cc-bridge install
+chaosmonkey-cc-bridge-install        # interactive prompts for URL + connect code
 ```
 
-Enrolls via connect code; sessions attribute as `claude-code`.
+Headless install (CI, remote hosts):
+
+```bash
+CM_API_BASE_URL=https://your-instance CM_CONNECT_CODE=XXXX-XXXX \
+  chaosmonkey-cc-bridge-install
+```
+
+The installer merges hooks into `~/.claude/settings.json` (existing hooks are
+preserved; a backup is written). Sessions attribute as `claude-code`.
+Remove with `chaosmonkey-cc-bridge-uninstall`.
 
 ## Cursor Agents Window bridge (0.4.2-cursor-bridge)
 
@@ -42,18 +51,32 @@ a durable runtime under `~/.chaosmonkey-cursor-bridge/`. Requires Node.js >= 18.
 
 ```bash
 npm install -g <downloaded tgz>
-chaosmonkey-cursor-agent-bridge install
+chaosmonkey-cursor-bridge-install
 ```
 
-Sessions attribute as `cursor-agent` — kept distinct from Cursor IDE
-telemetry. This is the verified 0.4.2 implementation (sha-256
+`CM_API_BASE_URL` / `CM_CONNECT_CODE` environment variables enable
+non-interactive installs, same as the Claude Code bridge. Sessions attribute
+as `cursor-agent` — kept distinct from Cursor IDE telemetry. This is the
+verified 0.4.2 implementation (sha-256
 `972acbc5c02efccac995484c80534e34f28de837a1e65a72520286353d2bbe21`).
 
 ## Codex CLI bridge (0.4.1-codex-bridge)
 
 Reports OpenAI Codex CLI sessions; source variants (`codex-cli`, `codex_cli`,
-`openai-codex`) normalize to canonical `codex`. Install flow matches the other
-bridges.
+`openai-codex`) normalize to canonical `codex`. Requires Node.js >= 18 and the
+Codex CLI.
+
+```bash
+npm install -g <downloaded tgz>
+chaosmonkey-codex-bridge-install \
+  --api-base-url https://your-instance --connect-code XXXX-XXXX
+```
+
+The installer writes `~/.codex/hooks.json`. **Codex requires you to trust the
+hook**: start Codex, open `/hooks`, review the ChaosMonkey hook, and trust it —
+the bridge deliberately never uses `--dangerously-bypass-hook-trust`, so it
+reports nothing until you grant trust. Remove with
+`chaosmonkey-codex-bridge-uninstall`.
 
 ## GitHub OAuth (optional — delivery evidence)
 
@@ -78,6 +101,23 @@ For organization-level delivery evidence without per-user OAuth:
 
 Webhooks arrive at `POST /api/github/app/webhook` (signature-verified).
 Create the app at GitHub → Developer Settings → GitHub Apps.
+
+## Verification status
+
+Each client is validated in CI, but end-to-end coverage differs:
+
+| Client | Package & download | Hook/install lifecycle | Real client session |
+|---|---|---|---|
+| VS Code/Cursor extension | Verified — sha-checked vsix served by backend | Verified via connect-code exchange + ingest | Not exercised in a GUI session — historically production-observed |
+| Claude Code bridge | Verified | Verified end-to-end against a self-hosted instance (install → hooks → session → ingest → attribution) | Simulated hook lifecycle; `claude` CLI session not yet exercised |
+| Cursor Agents bridge | Verified — sha-pinned artifact + capability endpoint | Verified end-to-end (install → hooks → session lifecycle → ingest) | Simulated hook lifecycle; Agents Window not yet exercised |
+| Codex bridge | Verified | Verified end-to-end (install → hooks.json → session → ingest) | Requires manual hook-trust in Codex `/hooks`; real `codex` session not yet exercised |
+| GitHub OAuth | Config + callback handling covered by backend tests | — | Not exercised with live GitHub credentials |
+| GitHub App | Webhook signature handling covered by backend tests | — | Not exercised against a live GitHub App installation |
+
+"Not exercised" means the packaged client is verified against the self-hosted
+instance but a real vendor tool session hasn't been run in the release
+environment — the boundaries above are deliberate, not unknowns.
 
 ## Explicitly not supported
 

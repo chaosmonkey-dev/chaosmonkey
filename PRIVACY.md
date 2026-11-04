@@ -29,9 +29,13 @@ If you host ChaosMonkey for a team:
 
 - Tell your team what telemetry is collected and where it lives.
 - Secure the instance (HTTPS, `APP_DEBUG=false`, strong admin credentials).
-- `TELEMETRY_RETENTION_DAYS` controls automatic pruning of raw events.
-- `DEMO_MODE` inserts clearly-labeled synthetic data — do not enable it on an
-  instance holding real telemetry.
+- There is **no automatic retention or pruning** — telemetry events are kept
+  until you delete them. An authenticated admin can clear telemetry via
+  `POST /api/clear-data`; database-level deletion is also possible since the
+  SQLite file is yours. Plan your own retention/deletion policy.
+- `tools/demo/telemetry-simulator.js` can generate clearly-labeled synthetic
+  events for evaluation — keep demo data out of instances holding real
+  telemetry.
 
 ## Third-party services
 

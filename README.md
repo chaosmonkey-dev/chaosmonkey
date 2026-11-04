@@ -58,12 +58,12 @@ restore, upgrades, and environment configuration.
 
 | Tool | Client | Package version | Status |
 |---|---|---|---|
-| VS Code / Cursor IDE | `extensions/chaosmonkey-telemetry` (VSIX) | 0.4.1 | Shipped; production-observed |
-| Claude Code | `extensions/claude-code-bridge` | 0.4.2-cc-bridge | Shipped; production-observed |
-| Cursor Agents Window | `extensions/cursor-agent-bridge` | 0.4.2-cursor-bridge | Shipped; production-observed |
-| Codex CLI | `extensions/codex-bridge` | 0.4.1-codex-bridge | Shipped; production-observed |
-| GitHub OAuth | backend | — | Optional; self-configured |
-| GitHub App | backend | — | Optional; self-configured |
+| VS Code / Cursor IDE | `extensions/chaosmonkey-telemetry` (VSIX) | 0.4.1 | Package-verified; production-observed pre-release |
+| Claude Code | `extensions/claude-code-bridge` | 0.4.2-cc-bridge | End-to-end verified (install → hooks → ingest) |
+| Cursor Agents Window | `extensions/cursor-agent-bridge` | 0.4.2-cursor-bridge | End-to-end verified (install → hooks → ingest) |
+| Codex CLI | `extensions/codex-bridge` | 0.4.1-codex-bridge | End-to-end verified (install → hooks → ingest); requires hook-trust in Codex |
+| GitHub OAuth | backend | — | Optional; config + callback tested |
+| GitHub App | backend | — | Optional; webhook signature handling tested |
 
 Packaged client artifacts are served by the backend itself
 (`/api/*/download/latest`), so installs always get the version matching their

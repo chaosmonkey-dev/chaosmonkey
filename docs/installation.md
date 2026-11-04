@@ -55,8 +55,6 @@ applies them on every boot:
 | `APP_FRONTEND_URL` | `http://localhost:8080` | Used for CORS + OAuth redirects |
 | `CORS_ALLOWED_ORIGINS` | `APP_FRONTEND_URL` | Comma-separated allowed origins |
 | `SESSION_SECURE_COOKIES` | `false` | Set `true` behind HTTPS |
-| `TELEMETRY_RETENTION_DAYS` | `90` | Raw-event pruning window |
-| `DEMO_MODE` | `false` | Seed clearly-labeled synthetic data |
 | `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | unset | Optional GitHub OAuth |
 | `GITHUB_APP_*` | unset | Optional GitHub App (see integrations) |
 | `ATLASSIAN_CLIENT_ID` / `ATLASSIAN_CLIENT_SECRET` | unset | Optional |

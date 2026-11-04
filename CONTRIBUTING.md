@@ -29,7 +29,8 @@ PRs without sign-offs cannot be merged.
 - **Backend** — Laravel 12 / PHP 8.2+. Follow existing controller/service
   patterns; run `cd backend && ./vendor/bin/phpunit` before submitting.
 - **Frontend** — Vue 3 composition API + TypeScript + Pinia + Tailwind. Run
-  `npm run lint` and `npm run build`. Never assign to reactive state inside a
+  `npm run test` and `npm run build` before submitting (there is currently no
+  lint gate in the project). Never assign to reactive state inside a
   Vue `computed()` getter — use methods, watchers, or event handlers.
 - **Extensions/bridges** — dependency-free Node.js >= 18 where possible; each
   bridge has its own test suite (`npm test` inside the bridge directory).
