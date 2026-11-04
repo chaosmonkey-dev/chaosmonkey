@@ -16,6 +16,8 @@
   "dependencies": {
     "@types/node": "^25.9.0",
     "axios": "^1.11.0",
+    "bootstrap": "^5.3.2",
+    "bootstrap-icons": "^1.11.2",
     "chart.js": "^4.5.0",
     "chartjs-adapter-date-fns": "^3.0.0",
     "date-fns": "^4.1.0",
@@ -41,11 +43,11 @@
   },
   "license": "Apache-2.0",
   "optionalDependencies": {
-    "@rollup/rollup-linux-x64-gnu": "4.62.2",
-    "@rollup/rollup-linux-x64-musl": "4.62.2",
+    "@esbuild/linux-arm64": "0.21.5",
     "@esbuild/linux-x64": "0.21.5",
     "@rollup/rollup-linux-arm64-gnu": "4.62.2",
     "@rollup/rollup-linux-arm64-musl": "4.62.2",
-    "@esbuild/linux-arm64": "0.21.5"
+    "@rollup/rollup-linux-x64-gnu": "4.62.2",
+    "@rollup/rollup-linux-x64-musl": "4.62.2"
   }
 }
