@@ -11,10 +11,11 @@ class AtlassianOAuthController extends Controller
 {
     public function redirectToAtlassian()
     {
-        $clientId = env('ATLASSIAN_CLIENT_ID');
-        $redirectUri = env('APP_URL') . '/api/atlassian/oauth/callback';
+        // Read via config() so values survive `php artisan config:cache`.
+        $clientId = config('services.atlassian.client_id');
+        $redirectUri = config('services.atlassian.redirect');
 
-        // Basic validation for required env
+        // Basic validation for required config
         $missing = [];
         if (!$clientId) $missing[] = 'ATLASSIAN_CLIENT_ID';
 
@@ -74,10 +75,11 @@ class AtlassianOAuthController extends Controller
             return response()->json(['error' => 'No authorization code received'], 400);
         }
 
-        // Exchange code for token if configured
-        $clientId = env('ATLASSIAN_CLIENT_ID');
-        $clientSecret = env('ATLASSIAN_CLIENT_SECRET');
-        $redirectUri = env('APP_URL') . '/api/atlassian/oauth/callback';
+        // Exchange code for token if configured — read via config() so
+        // values survive `php artisan config:cache`.
+        $clientId = config('services.atlassian.client_id');
+        $clientSecret = config('services.atlassian.client_secret');
+        $redirectUri = config('services.atlassian.redirect');
 
         $missing = [];
         if (!$clientId) $missing[] = 'ATLASSIAN_CLIENT_ID';

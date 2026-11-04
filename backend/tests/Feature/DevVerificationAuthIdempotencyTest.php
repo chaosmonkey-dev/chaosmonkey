@@ -28,17 +28,10 @@ class DevVerificationAuthIdempotencyTest extends TestCase
         config(['app.env' => 'local']);
         config(['app.key' => 'base64:test-key-for-deterministic-token-verification']);
         \Cache::flush();
-        // The endpoint reads env directly for CM_ENABLE_DEV_VERIFICATION_AUTH.
-        // In testing, env vars set in phpunit.xml override .env. We need
-        // to set this via putenv since the controller calls env() directly.
-        putenv('CM_ENABLE_DEV_VERIFICATION_AUTH=true');
+        // The endpoint reads CM_ENABLE_DEV_VERIFICATION_AUTH through
+        // services.chaosmonkey.dev_verification_auth (config-cached).
+        config(['services.chaosmonkey.dev_verification_auth' => true]);
         $this->withoutMiddleware();
-    }
-
-    protected function tearDown(): void
-    {
-        putenv('CM_ENABLE_DEV_VERIFICATION_AUTH');
-        parent::tearDown();
     }
 
     /**

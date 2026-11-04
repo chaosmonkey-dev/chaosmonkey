@@ -284,7 +284,7 @@ class TelemetryController extends Controller
             return null;
         }
         
-        if (env('PI_DEBUG')) {
+        if (config('services.chaosmonkey.pi_debug')) {
             Log::info('[PI_DEBUG][TTFC] Computing TTFC', [
                 'session_id' => $sessionId,
                 'existing_value' => $existingValue
@@ -297,7 +297,7 @@ class TelemetryController extends Controller
         $session = DemoAnalyticsFilter::apply($sessionQuery)->first();
             
         if (!$session) {
-            if (env('PI_DEBUG')) {
+            if (config('services.chaosmonkey.pi_debug')) {
                 Log::info('[PI_DEBUG][TTFC] No session event found', ['session_id' => $sessionId]);
             }
             return null;
@@ -305,7 +305,7 @@ class TelemetryController extends Controller
         
         $sessionStart = $session->timestamp;
         
-        if (env('PI_DEBUG')) {
+        if (config('services.chaosmonkey.pi_debug')) {
             Log::info('[PI_DEBUG][TTFC] Session found', [
                 'session_id' => $sessionId,
                 'session_start' => $sessionStart->toISOString()
@@ -319,7 +319,7 @@ class TelemetryController extends Controller
         $firstCommit = DemoAnalyticsFilter::apply($firstCommitQuery)->first();
             
         if (!$firstCommit) {
-            if (env('PI_DEBUG')) {
+            if (config('services.chaosmonkey.pi_debug')) {
                 Log::info('[PI_DEBUG][TTFC] No commit event found', ['session_id' => $sessionId]);
             }
             return null;
@@ -327,7 +327,7 @@ class TelemetryController extends Controller
         
         $commitTime = $firstCommit->timestamp;
         
-        if (env('PI_DEBUG')) {
+        if (config('services.chaosmonkey.pi_debug')) {
             Log::info('[PI_DEBUG][TTFC] Commit found', [
                 'session_id' => $sessionId,
                 'commit_time' => $commitTime->toISOString()
@@ -337,7 +337,7 @@ class TelemetryController extends Controller
         // Calculate difference in milliseconds (commit - session start)
         $diff = $sessionStart->diffInMilliseconds($commitTime);
         
-        if (env('PI_DEBUG')) {
+        if (config('services.chaosmonkey.pi_debug')) {
             Log::info('[PI_DEBUG][TTFC] TTFC computed', [
                 'session_id' => $sessionId,
                 'diff_ms' => $diff,
@@ -514,10 +514,10 @@ class TelemetryController extends Controller
                 ]);
             }
             
-            // CR-X GLOO: Server-authoritative org resolution.
-            // Do NOT default to org 1 — that caused tenant mis-attribution
-            // (Kasey's 0.3.9 events landed in Matt's org 1 because the default
-            // masked user_id→org resolution).  When the client sends no
+            // Server-authoritative org resolution.
+            // Do NOT default to a fixed org id — a past production incident
+            // showed the default can silently mis-attribute one tenant's
+            // events to another tenant's org.  When the client sends no
             // organization_id, fall through to user_id→org resolution below.
             $organizationId = $request->input('organization_id');
             
@@ -613,7 +613,7 @@ class TelemetryController extends Controller
         }
 
         // Add proof logging for event types before/after sanitization
-        if (env('PI_DEBUG')) {
+        if (config('services.chaosmonkey.pi_debug')) {
             $incomingEventTypes = array_map(fn($e) => $e['event_type'] ?? $e['type'] ?? 'unknown', $events);
             $sanitizedEventTypes = array_map(fn($e) => $e['event_type'], $sanitizedEvents);
             
@@ -634,7 +634,7 @@ class TelemetryController extends Controller
 
         $sessionId = $metadata['session_id'] ?? null;
 
-        if (env('CM_TELEMETRY_INGEST_LOG') === 'true') {
+        if (config('services.chaosmonkey.telemetry_ingest_log')) {
             $requestId = $request->header('X-Request-Id') ?: bin2hex(random_bytes(8));
             Log::info('[CM][telemetry][ingest]', [
                 'requestId' => $requestId,

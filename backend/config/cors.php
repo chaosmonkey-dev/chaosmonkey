@@ -1,15 +1,16 @@
 <?php
 
 $envOrigins = array_values(array_filter(array_map('trim', explode(',', env('CORS_ALLOWED_ORIGINS', ''))), fn ($v) => $v !== ''));
-$allowedOrigins = array_values(array_unique(array_merge($envOrigins, [
+$allowedOrigins = array_values(array_unique(array_filter(array_merge($envOrigins, [
     env('APP_FRONTEND_URL', 'http://localhost:5174'),
+    env('FRONTEND_URL'),
     env('FRONTEND_DEV_URL', 'http://localhost:5174'),
     env('FRONTEND_DEV_ALT_URL', 'http://localhost:5175'),
     env('FRONTEND_LOCALHOST_URL', 'http://127.0.0.1:5174'),
     env('FRONTEND_LOCALHOST_ALT_URL', 'http://127.0.0.1:5175'),
     'http://127.0.0.1:57195', // Browser preview
     'http://localhost:57195', // Browser preview alt
-])));
+]), fn ($v) => is_string($v) && $v !== '')));
 
 $allowedMethods = array_values(array_filter(array_map('trim', explode(',', env('CORS_ALLOWED_METHODS', 'GET,POST,PUT,PATCH,DELETE,OPTIONS'))), fn ($v) => $v !== ''));
 $allowedHeaders = array_values(array_filter(array_map('trim', explode(',', env('CORS_ALLOWED_HEADERS', 'Content-Type,Authorization,X-Requested-With,X-CSRF-TOKEN,X-Api-Token,chaosmonkey-auth-token'))), fn ($v) => $v !== ''));

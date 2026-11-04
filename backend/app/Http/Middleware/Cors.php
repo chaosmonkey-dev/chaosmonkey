@@ -81,10 +81,12 @@ class Cors
             $origins = array_merge($origins, $configOrigins);
         }
 
+        // Read via config() so origins survive `php artisan config:cache`.
+        // CORS_ALLOWED_ORIGINS, APP_FRONTEND_URL and FRONTEND_URL are all
+        // folded into config('cors.allowed_origins') above; app.frontend_url
+        // is kept here as a belt-and-suspenders fallback.
         foreach ([
-            env('CORS_ALLOWED_ORIGINS'),
-            env('APP_FRONTEND_URL'),
-            env('FRONTEND_URL'),
+            config('app.frontend_url'),
         ] as $value) {
             if (!$value) {
                 continue;

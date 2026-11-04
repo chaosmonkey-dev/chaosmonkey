@@ -19,8 +19,11 @@ class DevVerificationAuthController extends Controller
      */
     public function createVerificationToken()
     {
-        // Robust environment check with proper boolean parsing
-        $rawEnvValue = env('CM_ENABLE_DEV_VERIFICATION_AUTH', false);
+        // Robust environment check with proper boolean parsing.
+        // The CM_ENABLE_DEV_VERIFICATION_AUTH env var is resolved at
+        // config:cache time into services.chaosmonkey.dev_verification_auth;
+        // read via config() so it survives `php artisan config:cache`.
+        $rawEnvValue = config('services.chaosmonkey.dev_verification_auth', false);
         $enabled = filter_var($rawEnvValue, FILTER_VALIDATE_BOOLEAN);
         $environment = app()->environment();
         $isAllowedEnvironment = app()->environment(['local', 'testing']);

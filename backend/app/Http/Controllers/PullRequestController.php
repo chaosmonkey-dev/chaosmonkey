@@ -372,7 +372,7 @@ class PullRequestController extends Controller
         }
         
         // PI_DEBUG logging
-        if (env('PI_DEBUG') === 'true' || env('METRICS_DEBUG') === 'true') {
+        if (config('services.chaosmonkey.pi_debug') === 'true' || config('services.chaosmonkey.metrics_debug') === 'true') {
             Log::info('=== PI READINESS INGESTION PROOF: PR REVIEW METRICS ===', [
                 'token_owner' => session('github_user_data.login') ?? 'unknown',
                 'repos_included' => array_unique(array_column($allPRs, 'head.repo.full_name')),
@@ -545,7 +545,7 @@ class PullRequestController extends Controller
                     }
                     
                     // PI_DEBUG logging
-                    if (env('PI_DEBUG') === 'true' || env('METRICS_DEBUG') === 'true') {
+                    if (config('services.chaosmonkey.pi_debug') === 'true' || config('services.chaosmonkey.metrics_debug') === 'true') {
                         Log::info('=== PI READINESS INGESTION PROOF: DEPLOYMENT METRICS ===', [
                             'repos_checked' => $repoLimit,
                             'deployments_found' => count($allDeployments),
@@ -1275,10 +1275,10 @@ class PullRequestController extends Controller
             // gated to Local Lab mode (APP_ENV=local) ONLY. In production,
             // an org with zero observed deployments must see a truthful
             // empty/sparse time series — not randomized non-zero buckets.
-            // This prevents a production pilot (Ed/Patra/Ryan) from
-            // displaying fabricated delivery frequency / change-failure
-            // rate / cost-per-deployment when no real deployment evidence
-            // exists. Local Lab retains the seeded smoothing behavior for
+            // This prevents a production deployment from displaying
+            // fabricated delivery frequency / change-failure rate /
+            // cost-per-deployment when no real deployment evidence exists.
+            // Local Lab retains the seeded smoothing behavior for
             // demo/product-development continuity.
             $isLocalLab = config('app.env') === 'local';
             $allowDerivedRateSeeding = $isLocalLab;
@@ -1745,10 +1745,10 @@ class PullRequestController extends Controller
             'oauth_token_present' => !empty($oauthToken),
             'repos_count' => is_array($repos) ? count($repos) : 'not_array',
             'time_filter' => $timeFilter,
-            'github_delivery_enabled' => env('GITHUB_DELIVERY_METRICS_ENABLED'),
-            'github_delivery_raw_value' => env('GITHUB_DELIVERY_METRICS_ENABLED'),
-            'github_delivery_is_string_true' => env('GITHUB_DELIVERY_METRICS_ENABLED') === 'true',
-            'github_delivery_is_boolean_true' => env('GITHUB_DELIVERY_METRICS_ENABLED') === true
+            'github_delivery_enabled' => config('services.github.delivery_metrics_enabled'),
+            'github_delivery_raw_value' => config('services.github.delivery_metrics_enabled'),
+            'github_delivery_is_string_true' => config('services.github.delivery_metrics_enabled') === 'true',
+            'github_delivery_is_boolean_true' => config('services.github.delivery_metrics_enabled') === true
         ]);
         
         if (!$oauthToken || empty($repos)) {
@@ -1762,11 +1762,11 @@ class PullRequestController extends Controller
         $userId = session('github_user_data.id') ?? 'anonymous';
         $repoListHash = md5(json_encode($repos));
         $cacheKey = "github_delivery_metrics:{$userId}:{$timeFilter}:{$repoListHash}";
-        $ttl = env('GITHUB_DELIVERY_METRICS_TTL_SECONDS', 900);
+        $ttl = config('services.github.delivery_metrics_ttl_seconds', 900);
         
         $cached = \Cache::get($cacheKey);
         if ($cached) {
-            if (env('METRICS_DEBUG') === 'true') {
+            if (config('services.chaosmonkey.metrics_debug') === 'true') {
                 Log::info('GITHUB_DELIVERY_CACHE_HIT', [
                     'user_id' => $userId,
                     'time_filter' => $timeFilter,
@@ -1776,7 +1776,7 @@ class PullRequestController extends Controller
             return $cached;
         }
 
-        if (env('METRICS_DEBUG') === 'true') {
+        if (config('services.chaosmonkey.metrics_debug') === 'true') {
             Log::info('GITHUB_DELIVERY_CACHE_MISS', [
                 'user_id' => $userId,
                 'time_filter' => $timeFilter,
@@ -1786,9 +1786,9 @@ class PullRequestController extends Controller
         }
 
         try {
-            $timeout = env('GITHUB_DELIVERY_METRICS_TIMEOUT_SECONDS', 30);
+            $timeout = config('services.github.delivery_metrics_timeout_seconds', 30);
             $startTime = time();
-            $repoLimit = env('GITHUB_DELIVERY_METRICS_REPO_LIMIT', 10);
+            $repoLimit = config('services.github.delivery_metrics_repo_limit', 10);
             
             // Apply repo limit
             $reposToProcess = array_slice($repos, 0, $repoLimit);
@@ -2026,7 +2026,7 @@ class PullRequestController extends Controller
             // Cache the result
             \Cache::put($cacheKey, $result, $ttl);
             
-            if (env('METRICS_DEBUG') === 'true') {
+            if (config('services.chaosmonkey.metrics_debug') === 'true') {
                 Log::info('GITHUB_DELIVERY_METRICS_COMPUTED', [
                     'user_id' => $userId,
                     'time_filter' => $timeFilter,
@@ -2434,9 +2434,9 @@ class PullRequestController extends Controller
                 'oauth_tokens_db_count' => \DB::table('oauth_tokens')->count(),
                 'oauth_tokens_latest_at' => \DB::table('oauth_tokens')->max('updated_at'),
                 'oauth_tokens_has_valid' => \DB::table('oauth_tokens')->where('access_token', '!=', 'pending')->whereNotNull('access_token')->exists(),
-                'env_github_token_present' => !empty(env('GITHUB_TOKEN')),
-                'env_gh_token_present' => !empty(env('GH_TOKEN')),
-                'env_token_count' => (!empty(env('GITHUB_TOKEN')) ? 1 : 0) + (!empty(env('GH_TOKEN')) ? 1 : 0)
+                'env_github_token_present' => !empty(config('services.github.token')),
+                'env_gh_token_present' => !empty(config('services.github.gh_token')),
+                'env_token_count' => (!empty(config('services.github.token')) ? 1 : 0) + (!empty(config('services.github.gh_token')) ? 1 : 0)
             ];
         }
         
@@ -2545,7 +2545,7 @@ class PullRequestController extends Controller
             $start = microtime(true);
             Log::info("[CM_TRACE] {$trace} /api/metrics START");
             
-            if (env('PI_DEBUG')) {
+            if (config('services.chaosmonkey.pi_debug')) {
                 Log::info('[PI_DEBUG][ENTRY] PullRequestController@metrics', [
                     'method' => __METHOD__,
                     'oauth' => $request->get('oauth'),
@@ -2563,12 +2563,12 @@ class PullRequestController extends Controller
             $authenticatedUser = $request->get('authenticated_user');
             $organizationId = $authenticatedUser?->organization_id;
 
-            if (env('METRICS_DEBUG') === 'true') {
+            if (config('services.chaosmonkey.metrics_debug') === 'true') {
                 Log::info('METRICS_METHOD_CALLED', [
-                    'github_delivery_enabled' => env('GITHUB_DELIVERY_METRICS_ENABLED'),
-                    'github_delivery_raw_value' => env('GITHUB_DELIVERY_METRICS_ENABLED'),
-                    'github_delivery_is_string_true' => env('GITHUB_DELIVERY_METRICS_ENABLED') === 'true',
-                    'github_delivery_is_boolean_true' => env('GITHUB_DELIVERY_METRICS_ENABLED') === true
+                    'github_delivery_enabled' => config('services.github.delivery_metrics_enabled'),
+                    'github_delivery_raw_value' => config('services.github.delivery_metrics_enabled'),
+                    'github_delivery_is_string_true' => config('services.github.delivery_metrics_enabled') === 'true',
+                    'github_delivery_is_boolean_true' => config('services.github.delivery_metrics_enabled') === true
                 ]);
             }
             
@@ -2853,14 +2853,14 @@ class PullRequestController extends Controller
         $metrics['outcomes_by_month'] = $this->aggregateOutcomesByMonth($repoAllowList, $oauthUser);
 
         // If OAuth is available, enhance the data with GitHub API calls
-        if (env('METRICS_DEBUG') === 'true') {
+        if (config('services.chaosmonkey.metrics_debug') === 'true') {
             Log::info('OAUTH_DEBUG', [
                 'has_oauth_token' => !empty($oauthToken),
                 'has_oauth_user' => !empty($oauthUser),
-                'github_delivery_enabled' => env('GITHUB_DELIVERY_METRICS_ENABLED'),
-                'github_delivery_raw_value' => env('GITHUB_DELIVERY_METRICS_ENABLED'),
-                'github_delivery_is_string_true' => env('GITHUB_DELIVERY_METRICS_ENABLED') === 'true',
-                'github_delivery_is_boolean_true' => env('GITHUB_DELIVERY_METRICS_ENABLED') === true
+                'github_delivery_enabled' => config('services.github.delivery_metrics_enabled'),
+                'github_delivery_raw_value' => config('services.github.delivery_metrics_enabled'),
+                'github_delivery_is_string_true' => config('services.github.delivery_metrics_enabled') === 'true',
+                'github_delivery_is_boolean_true' => config('services.github.delivery_metrics_enabled') === true
             ]);
         }
         
@@ -2955,7 +2955,7 @@ class PullRequestController extends Controller
                 ]);
                 
                 // PI_DEBUG: Comprehensive ingestion proof logging
-                if (env('PI_DEBUG') === 'true' || env('METRICS_DEBUG') === 'true') {
+                if (config('services.chaosmonkey.pi_debug') === 'true' || config('services.chaosmonkey.metrics_debug') === 'true') {
                     $reposIncluded = [];
                     $prCountsBeforeFilter = 0;
                     $prCountsAfterFilter = 0;
@@ -3186,7 +3186,7 @@ class PullRequestController extends Controller
             }
 
             // Override deployment_metrics with GitHub Actions data if enabled
-                if (env('GITHUB_DELIVERY_METRICS_ENABLED')) { // FIXED: Accept both string and boolean values
+                if (config('services.github.delivery_metrics_enabled')) { // FIXED: Accept both string and boolean values
                     Log::info('[PI_DEBUG][PATH] GITHUB DELIVERY METRICS OVERRIDE', [
                         'flag_enabled' => true,
                         'has_repositories' => isset($enhancedData['repositories']),
@@ -3236,7 +3236,7 @@ class PullRequestController extends Controller
                                 'new_latest' => $metrics['deployment_metrics']['latest_deployment']['deployed_at']
                             ]);
                             
-                            if (env('METRICS_DEBUG') === 'true') {
+                            if (config('services.chaosmonkey.metrics_debug') === 'true') {
                                 Log::info('GITHUB_DELIVERY_METRICS_APPLIED', [
                                     'failed_count' => $githubDeliveryMetrics['failed_deployment_count'],
                                     'success_count' => $githubDeliveryMetrics['success_deployment_count']
@@ -3434,10 +3434,10 @@ class PullRequestController extends Controller
             'oauth_defaulted' => $oauthDefaulted,
             'github_connected' => $githubConnected,
             'github_connection_reason' => $githubConnectionReason,
-            'github_delivery_enabled' => env('GITHUB_DELIVERY_METRICS_ENABLED'),
-            'github_delivery_raw_value' => env('GITHUB_DELIVERY_METRICS_ENABLED'),
-            'github_delivery_is_string_true' => env('GITHUB_DELIVERY_METRICS_ENABLED') === 'true',
-            'github_delivery_is_boolean_true' => env('GITHUB_DELIVERY_METRICS_ENABLED') === true,
+            'github_delivery_enabled' => config('services.github.delivery_metrics_enabled'),
+            'github_delivery_raw_value' => config('services.github.delivery_metrics_enabled'),
+            'github_delivery_is_string_true' => config('services.github.delivery_metrics_enabled') === 'true',
+            'github_delivery_is_boolean_true' => config('services.github.delivery_metrics_enabled') === true,
             'test_field' => 'CODE_UPDATED_' . date('H:i:s')
         ];
 
@@ -3942,7 +3942,7 @@ class PullRequestController extends Controller
      */
     private function calculateCommitsPerSession($sessions)
     {
-        if (env('PI_DEBUG')) {
+        if (config('services.chaosmonkey.pi_debug')) {
             Log::info('[PI_DEBUG][PI_CALC] calculateCommitsPerSession', [
                 'sessions_is_empty' => empty($sessions),
                 'sessions_count' => $sessions ? $sessions->count() : 'null',
@@ -3957,7 +3957,7 @@ class PullRequestController extends Controller
         $totalCommits = $sessions->sum('commit_count');
         $sessionCount = $sessions->count();
         
-        if (env('PI_DEBUG')) {
+        if (config('services.chaosmonkey.pi_debug')) {
             Log::info('[PI_DEBUG][PI_CALC] calculateCommitsPerSession result', [
                 'total_commits' => $totalCommits,
                 'session_count' => $sessionCount,
@@ -3993,7 +3993,7 @@ class PullRequestController extends Controller
      */
     private function calculateAISuggestionsAccepted($sessions)
     {
-        if (env('PI_DEBUG')) {
+        if (config('services.chaosmonkey.pi_debug')) {
             Log::info('[PI_DEBUG][PI_CALC] calculateAISuggestionsAccepted', [
                 'sessions_count' => $sessions->count(),
                 'sample_ai_burst_count' => $sessions->take(3)->pluck('ai_burst_count')->toArray(),
@@ -4014,7 +4014,7 @@ class PullRequestController extends Controller
         
         $result = $validSessions->avg('ai_burst_count');
         
-        if (env('PI_DEBUG')) {
+        if (config('services.chaosmonkey.pi_debug')) {
             Log::info('[PI_DEBUG][PI_CALC] calculateAISuggestionsAccepted result', [
                 'valid_sessions_count' => $validSessions->count(),
                 'result' => $result
@@ -6598,7 +6598,7 @@ class PullRequestController extends Controller
         }
         
         // PI_DEBUG logging for PR size
-        if (env('PI_DEBUG') === 'true' || env('METRICS_DEBUG') === 'true') {
+        if (config('services.chaosmonkey.pi_debug') === 'true' || config('services.chaosmonkey.metrics_debug') === 'true') {
             Log::info('=== PI READINESS INGESTION PROOF: PR SIZE METRICS ===', [
                 'total_prs' => $totalPRs,
                 'prs_with_size_data' => $smallPRs + $mediumPRs + $largePRs,
@@ -7265,7 +7265,7 @@ return response()->json([
 
     public function getGithubRepositories()
     {
-        $token = env('GITHUB_TOKEN');
+        $token = config('services.github.token');
         if (!$token) {
             Log::error('GitHub token not set');
             return response()->json(['error' => 'GitHub token not set'], 500);
