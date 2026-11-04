@@ -1,10 +1,16 @@
 {
     "$schema": "https://getcomposer.org/schema.json",
-    "name": "laravel/laravel",
+    "name": "chaosmonkey/backend",
     "type": "project",
-    "description": "The skeleton application for the Laravel framework.",
-    "keywords": ["laravel", "framework"],
-    "license": "MIT",
+    "description": "ChaosMonkey backend — self-hosted telemetry and analytics for AI-assisted engineering teams.",
+    "keywords": [
+        "chaosmonkey",
+        "telemetry",
+        "observability",
+        "ai",
+        "engineering"
+    ],
+    "license": "Apache-2.0",
     "require": {
         "php": "^8.2",
         "doctrine/dbal": "^4.4",

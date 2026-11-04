@@ -15,11 +15,10 @@ The recommended install is a single all-in-one container — nginx, PHP-FPM,
 Laravel, and a persistent SQLite database:
 
 ```bash
-docker build -t chaosmonkey .
 docker run -d --name chaosmonkey \
   -p 8080:80 \
   -v chaosmonkey-data:/data \
-  chaosmonkey
+  ghcr.io/chaosmonkey-dev/chaosmonkey:0.1.0
 ```
 
 Then open <http://localhost:8080> and create your first administrator account:
@@ -29,15 +28,24 @@ docker exec -it chaosmonkey \
   php /var/www/backend/artisan chaosmonkey:create-admin you@example.com
 ```
 
-Or use Docker Compose:
+From there: create an invite, issue a connect code, and install a client
+(see [integrations](#supported-integrations)). Source builds and Docker
+Compose are documented in [docs/installation.md](docs/installation.md).
 
-```bash
-docker compose up -d
-```
+All application data lives in the `/data` volume — nothing leaves your
+infrastructure. GitHub integration is optional; telemetry works without it.
 
-All application data lives in the `/data` volume. See
-[docs/installation.md](docs/installation.md) for HTTPS deployment, backup and
-restore, upgrades, and environment configuration.
+## What it looks like
+
+*AI Operational Intelligence — five tracked workflows from real sessions
+(simulated demo data).*
+
+![ChaosMonkey dashboard — AI Operational Intelligence](docs/screenshots/dashboard.png)
+
+*Productivity by tool — per-workflow AI activity and session metrics
+(simulated demo data).*
+
+![Productivity by tool](docs/screenshots/productivity-by-tool.png)
 
 ## What it does
 
@@ -72,7 +80,9 @@ it is distinct from both the IDE extension and the Claude Code bridge, and its
 sessions are attributed as `cursor-agent`.
 
 See [docs/integrations.md](docs/integrations.md) for per-tool setup,
-limitations, and explicitly unsupported tools.
+limitations, and explicitly unsupported tools, and
+[docs/release-manifest.md](docs/release-manifest.md) for the checksum-pinned
+artifact manifest of the current release.
 
 ## Architecture
 

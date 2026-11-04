@@ -4,6 +4,14 @@ This directory contains the canonical reusable external technical
 documentation for ChaosMonkey. These documents are not branded for any
 specific partner or customer.
 
+> **Scope note for the open-source release.** These documents were written
+> while ChaosMonkey ran as hosted per-customer deployments, and use
+> "customer environment" language for the deployment boundary. In the
+> self-hosted model, your own instance plays that role — every reference to
+> "the customer's ChaosMonkey API/database" means your own installation.
+> The telemetry contract, identity model, and data classifications described
+> here are unchanged and still authoritative.
+
 ## Documents
 
 | # | Document | Purpose |

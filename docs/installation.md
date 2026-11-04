@@ -7,6 +7,18 @@
 
 ## Docker (recommended)
 
+Pull the published image (multi-arch, amd64 + arm64):
+
+```bash
+docker pull ghcr.io/chaosmonkey-dev/chaosmonkey:0.1.0
+docker run -d --name chaosmonkey \
+  -p 8080:80 \
+  -v chaosmonkey-data:/data \
+  ghcr.io/chaosmonkey-dev/chaosmonkey:0.1.0
+```
+
+Or build from source:
+
 ```bash
 git clone https://github.com/chaosmonkey-dev/chaosmonkey.git
 cd chaosmonkey
@@ -16,6 +28,9 @@ docker run -d --name chaosmonkey \
   -v chaosmonkey-data:/data \
   chaosmonkey
 ```
+
+Pin an explicit version tag (`0.1.0`) rather than `latest` — releases are
+immutable and upgrades are deliberate.
 
 The container performs first-run initialization automatically: it writes
 `.env`, generates `APP_KEY`, creates `/data/database.sqlite`, and runs

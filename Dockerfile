@@ -66,4 +66,12 @@ RUN chmod +x /entrypoint.sh \
 VOLUME ["/data"]
 EXPOSE 80
 
+LABEL org.opencontainers.image.title="ChaosMonkey" \
+      org.opencontainers.image.description="Self-hosted observability for AI-assisted software engineering" \
+      org.opencontainers.image.source="https://github.com/chaosmonkey-dev/chaosmonkey" \
+      org.opencontainers.image.licenses="Apache-2.0"
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+  CMD wget -q -O /dev/null http://127.0.0.1/up || exit 1
+
 ENTRYPOINT ["/entrypoint.sh"]
