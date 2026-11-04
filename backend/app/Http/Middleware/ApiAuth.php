@@ -30,8 +30,12 @@ class ApiAuth extends Middleware
                 return null;
             }
 
-            // Local/dev mode only: auto-create default user
-            $this->createAndAuthenticateDefaultUser();
+            // Dev auto-login is strictly limited to local/testing. In every
+            // other environment (production, staging, anything unset) the
+            // request must fail closed to a 401 — never mint a default user.
+            if (app()->environment(['local', 'testing'])) {
+                $this->createAndAuthenticateDefaultUser();
+            }
         }
 
         // If Auth::user() exists, set request authenticated_user
@@ -46,7 +50,8 @@ class ApiAuth extends Middleware
     /**
      * Create and authenticate a default user and organization if none exist.
      *
-     * DEV MODE ONLY — never called in pilot mode.
+     * DEV MODE ONLY — guarded by app()->environment(['local','testing'])
+     * at the call site, so this can never run in production.
      */
     private function createAndAuthenticateDefaultUser(): void
     {
@@ -60,11 +65,12 @@ class ApiAuth extends Middleware
                 'slug' => 'default-' . time(),
             ]);
 
-            // Create default user
+            // Create default user (dev only — password is a random throwaway;
+            // real accounts are created via invites or chaosmonkey:create-admin)
             $user = User::create([
                 'name' => 'Default User',
                 'email' => 'default@example.com',
-                'password' => bcrypt('password'),
+                'password' => bcrypt(\Illuminate\Support\Str::random(40)),
                 'organization_id' => $organization->id,
             ]);
         }

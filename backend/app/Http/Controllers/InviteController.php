@@ -882,32 +882,6 @@ class InviteController extends Controller
     }
 
     /**
-     * Get or create a default user for development/testing
-     */
-    private function getOrCreateDefaultUser(): User
-    {
-        $user = User::first();
-        
-        if (!$user) {
-            // Create default organization
-            $organization = Organization::create([
-                'name' => 'Default Organization',
-                'slug' => 'default-' . time(),
-            ]);
-
-            // Create default user
-            $user = User::create([
-                'name' => 'Default User',
-                'email' => 'default@example.com',
-                'password' => bcrypt('password'),
-                'organization_id' => $organization->id,
-            ]);
-        }
-
-        return $user;
-    }
-
-    /**
      * Cancel an invite (soft-close: invite + its codes are revoked, the row
      * is retained so installation-bound tokens stay intact).
      */

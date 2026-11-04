@@ -13,9 +13,13 @@ class DatabaseSeeder extends Seeder
     public function run(): void
     {
         $this->call([
-            DefaultUserSeeder::class,
             OrganizationSeeder::class,
-            HeroInsightsDemoSeeder::class,
         ]);
+
+        // NOTE: No default user is seeded. Create the first admin/owner
+        // account explicitly with:
+        //   php artisan chaosmonkey:create-admin you@example.com --generate
+        // Demo data seeders (HeroInsightsDemoSeeder, GitHubDemoSeeder, ...)
+        // must be invoked by name — never from the default path.
     }
 }

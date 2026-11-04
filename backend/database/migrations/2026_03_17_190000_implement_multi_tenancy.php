@@ -4,16 +4,18 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 return new class extends Migration
 {
     /**
      * Run the migrations.
      *
-     * Data-driven guard: the legacy ChaosMonkey org / Matt user backfill only
+     * Data-driven guard: the legacy ChaosMonkey org / user backfill only
      * runs when pre-existing records actually need organization assignment.
-     * A fresh empty Patra DB has zero rows to backfill, so no default org or
-     * user is created. Patra org/admin are created explicitly during deployment.
+     * A fresh empty database has zero rows to backfill, so no default org or
+     * user is created. The org/admin for a new install are created
+     * explicitly during deployment (php artisan chaosmonkey:create-admin).
      */
     public function up(): void
     {
@@ -52,7 +54,10 @@ return new class extends Migration
         }
 
         if ($needsBackfill) {
-            // Create Matt McClintock user if not exists and assign to ChaosMonkey org
+            // Create the legacy backfill user if not exists and assign to
+            // the ChaosMonkey org. The account needs a row for FK/org
+            // assignment only, so it gets a random unusable password —
+            // never a guessable placeholder.
             $mattUser = DB::table('users')->where('github_id', 'matt_mcclintock')->first();
             if (!$mattUser) {
                 DB::table('users')->insert([
@@ -60,7 +65,7 @@ return new class extends Migration
                     'email' => 'matt@chaosmonkey.com',
                     'github_id' => 'matt_mcclintock',
                     'organization_id' => $chaosMonkeyOrgId,
-                    'password' => bcrypt('password'), // placeholder
+                    'password' => bcrypt(Str::random(40)),
                     'created_at' => now(),
                     'updated_at' => now(),
                 ]);
