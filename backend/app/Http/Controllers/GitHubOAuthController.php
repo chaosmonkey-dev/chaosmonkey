@@ -26,7 +26,7 @@ class GitHubOAuthController extends Controller
     {
         // CR-X P0-0: Read GitHub OAuth config via config(), not env().
         // Direct env() returns null when Laravel config cache is enabled
-        // (Sep 11 Gloo incident root cause).  config() reads the cached
+        // (a past production outage traced to exactly this).  config() reads the cached
         // values resolved at config:cache time.
         $clientId = config('services.github.client_id');
         $redirectUri = config('services.github.redirect');

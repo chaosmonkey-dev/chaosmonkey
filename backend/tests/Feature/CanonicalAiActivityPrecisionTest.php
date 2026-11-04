@@ -15,8 +15,8 @@ use Tests\TestCase;
  * P1 regression — canonical aggregated responses must preserve fractional
  * ai_suggestions_accepted (AVG of metadata.ai_burst_count). The serializer
  * previously cast the average to (int), truncating every sub-1.0 average to
- * 0 — which displayed Patra's real ~0.7/session activity as "0.0" on the AIOI
- * workflow card while PBT (decimal path) showed ~0.3.
+ * 0 — which displayed a real tenant's ~0.7/session activity as "0.0" on the
+ * AIOI workflow card while PBT (decimal path) showed ~0.3.
  */
 class CanonicalAiActivityPrecisionTest extends TestCase
 {
@@ -132,7 +132,7 @@ class CanonicalAiActivityPrecisionTest extends TestCase
 
     public function test_patra_shaped_data_no_longer_displays_zero(): void
     {
-        // Patra week-41 shape: invite:3=148 sessions/115 bursts, invite:6=39/19,
+        // Production tenant week-41 shape: invite:3=148 sessions/115 bursts, invite:6=39/19,
         // invite:17=2/16 — scaled down 10x preserving fractional averages.
         $invite3 = Invite::create(['organization_id' => $this->org->id, 'email' => 'a@example.com', 'expires_at' => Invite::enrollmentNeverExpires()]);
         $invite6 = Invite::create(['organization_id' => $this->org->id, 'email' => 'b@example.com', 'expires_at' => Invite::enrollmentNeverExpires()]);

@@ -20,7 +20,6 @@ use Tests\TestCase;
  * - allows RefreshDatabase only against permitted targets
  * - refuses destructive commands against non-approved physical paths
  * - preserves rejected files byte-identical after refusal
- * - confirms LocalSnapshotIntegrationTest no longer uses physical app DB
  *
  * @group p0f-safety
  */
@@ -129,9 +128,9 @@ class DatabaseSafetyGuardTest extends TestCase
     /**
      * 9. Post-setUp/precondition catches a child test changing DB config.
      *
-     * This test simulates what LocalSnapshotIntegrationTest used to do:
-     * repoint the DB config to a physical path. The assertPreConditions
-     * guard in TestCase should catch this.
+     * This test simulates a child test repointing the DB config to a
+     * physical path. The assertPreConditions guard in TestCase should
+     * catch this.
      */
     public function test_post_setup_guard_catches_repointed_config(): void
     {
@@ -225,33 +224,6 @@ class DatabaseSafetyGuardTest extends TestCase
 
         // Cleanup
         unlink($tempFile);
-    }
-
-    /**
-     * 14. LocalSnapshotIntegrationTest no longer makes physical operational
-     *     DB the Laravel application connection.
-     *
-     * Verifies that the test class exists and does not contain the old
-     * config override that repointed the application DB.
-     */
-    public function test_local_snapshot_test_does_not_repoint_app_db(): void
-    {
-        $testFile = base_path('tests/Feature/LocalSnapshotIntegrationTest.php');
-        $this->assertFileExists($testFile);
-
-        $content = file_get_contents($testFile);
-
-        // The old bypass: config(['database.connections.sqlite.database' => database_path('cr1-local-working.sqlite')])
-        // Should NOT be present as an application DB repoint.
-        $this->assertStringNotContainsString(
-            "config(['database.connections.sqlite.database' => database_path('cr1-local-working.sqlite')])",
-            $content,
-            'LocalSnapshotIntegrationTest must not repoint the application DB to the physical Local DB'
-        );
-
-        // Should use a separate read-only PDO connection
-        $this->assertStringContainsString('mode=ro', $content, 'Should use read-only PDO connection');
-        $this->assertStringContainsString('immutable=1', $content, 'Should use immutable read-only connection');
     }
 
     // ════════════════════════════════════════════════════════════════

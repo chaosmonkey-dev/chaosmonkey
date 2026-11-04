@@ -16,7 +16,7 @@ use Tests\TestCase;
  * - Content-Type is application/gzip
  * - Content-Disposition is attachment with the correct filename
  * - Served bytes match the source-controlled artifact
- * - SHA-256 matches the release manifest (and the accepted Gloo artifact)
+ * - SHA-256 matches the release manifest (and the accepted release artifact)
  * - Route is public (no SimpleTokenAuth)
  * - Missing artifact aborts 500 rather than serving an empty body
  */
@@ -114,7 +114,8 @@ class CursorAgentBridgeDownloadTest extends TestCase
 
     /**
      * A missing artifact must fail closed (500), never serve an
-     * empty/zero-byte body — the observed Gloo probe anomaly class.
+     * empty/zero-byte body — the anomaly class observed on a past
+     * production download probe.
      */
     public function test_missing_artifact_fails_closed(): void
     {

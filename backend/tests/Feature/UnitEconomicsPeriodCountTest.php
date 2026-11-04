@@ -12,9 +12,8 @@ use Tests\TestCase;
  * Runs against a disposable in-memory SQLite database (:memory:) with
  * fixtures that prove the period-count, provenance, and authority contracts.
  *
- * Local-snapshot integration tests (exact hardcoded counts from the real
- * local DB) have been moved to LocalSnapshotIntegrationTest.php with
- * @group local-snapshot, excluded from the default suite.
+ * Local-snapshot forensic checks live outside this suite; this test only
+ * exercises the :memory: contract.
  */
 class UnitEconomicsPeriodCountTest extends TestCase
 {

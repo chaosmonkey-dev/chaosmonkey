@@ -311,7 +311,7 @@ class PilotRolloutContractTest extends TestCase
 
     /**
      * Test 9: api_base_url derives from runtime app/tenant configuration,
-     * not a Priority Dispatch hardcode.
+     * not a hardcoded tenant hostname.
      */
     public function test_invite_setup_api_base_url_derives_from_runtime_config(): void
     {

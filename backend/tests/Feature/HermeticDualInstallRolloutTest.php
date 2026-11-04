@@ -5,8 +5,8 @@
  * Proves the complete user journey: ONE developer, ONE still-valid connect
  * code, TWO distinct installations (IDE 0.4.1 + Claude Code bridge 0.4.1-cc-bridge).
  *
- * Runs entirely on :memory: SQLite — never touches authoritative Local data,
- * Ed, Kasey, Patra, Ryan, or any pilot environment.
+ * Runs entirely on :memory: SQLite — never touches a real local database
+ * or any production environment.
  *
  * Acceptance contract:
  *  - connect code generation produces persistent admin-visible code state

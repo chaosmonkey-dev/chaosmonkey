@@ -38,7 +38,7 @@ class RevokeOAuthIsolationTest extends TestCase
             'role' => 'admin',
         ]);
 
-        // User B: Patra customer authority
+        // User B: second-tenant authority
         $this->userB = User::create([
             'name' => 'Patra Authority',
             'email' => 'patra@test.com',

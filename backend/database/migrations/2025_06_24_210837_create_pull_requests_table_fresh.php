@@ -10,12 +10,12 @@ use Illuminate\Support\Facades\Schema;
  * On existing DBs where pull_requests already exists (created historically
  * via pending/ or manual schema changes), this migration is a no-op.
  *
- * On fresh Patra DBs, this creates the full canonical pull_requests schema
- * required by accepted V1, including columns that subsequent active migrations
- * (2026_05_04_224009) reference via ->after('deletions').
+ * On fresh databases, this creates the full canonical pull_requests schema
+ * required by the release schema contract, including columns that subsequent
+ * active migrations (2026_05_04_224009) reference via ->after('deletions').
  *
- * Schema derived from the accepted freeze DB
- * (cr5-v1-freeze-2026-08-21-1855.sqlite) pull_requests table definition.
+ * Schema derived from the accepted freeze-database pull_requests table
+ * definition (cr5-v1-freeze-2026-08-21-1855.sqlite).
  */
 return new class extends Migration
 {
