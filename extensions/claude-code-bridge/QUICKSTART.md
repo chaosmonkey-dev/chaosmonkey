@@ -48,6 +48,13 @@ The installer will prompt for:
    (e.g. `https://chaosmonkey.example.com`)
 2. **Connect code** — the code from step 2
 
+For non-interactive installs (CI, remote hosts), set environment variables
+instead — prompts are skipped:
+
+```bash
+CM_API_BASE_URL=https://your-instance CM_CONNECT_CODE=XXXX-XXXX node install.js
+```
+
 The installer:
 - Exchanges the connect code for a bearer token
 - Generates a pseudonymous `installation_id`

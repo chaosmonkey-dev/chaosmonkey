@@ -487,8 +487,11 @@ async function install() {
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
 
   try {
-    // 1. Collect API base URL
-    let apiBaseUrl = await prompt(rl, 'Enter your ChaosMonkey API base URL (e.g. https://chaosmonkey.example.com): ');
+    // 1. Collect API base URL — CM_API_BASE_URL / CM_CONNECT_CODE env vars
+    // enable non-interactive (headless/CI) installs; prompts are the fallback.
+    let apiBaseUrl = process.env.CM_API_BASE_URL
+      ? process.env.CM_API_BASE_URL.trim()
+      : await prompt(rl, 'Enter your ChaosMonkey API base URL (e.g. https://chaosmonkey.example.com): ');
     apiBaseUrl = (apiBaseUrl || '').trim().replace(/\/+$/, '');
     if (!apiBaseUrl) {
       log('ERROR: API base URL is required.');
@@ -501,7 +504,9 @@ async function install() {
     }
 
     // 2. Collect connect code
-    const connectCode = (await prompt(rl, 'Enter your connect code: ')).trim();
+    const connectCode = process.env.CM_CONNECT_CODE
+      ? process.env.CM_CONNECT_CODE.trim()
+      : (await prompt(rl, 'Enter your connect code: ')).trim();
     if (!connectCode) {
       log('ERROR: connect code is required.');
       process.exit(1);

@@ -38,7 +38,7 @@ const assert = require('assert');
 
 // ─── Constants ───────────────────────────────────────────────────────────
 
-const FROZEN_TGZ_SHA256 = '73590be057c0c1af4d3b89f4d4e7f40223a8ccace6a28ea2cebd651ade4cb9bc';
+const FROZEN_TGZ_SHA256 = '700122fbf079834591c2eb789d869238c7bf4e82872df4453e03ab312201c6ab';
 const FROZEN_TGZ_NAME = 'chaosmonkey-cc-bridge-0.4.2-cc-bridge.tgz';
 const REPO_ROOT = path.resolve(__dirname, '..', '..', '..');
 const TGZ_PATH = path.join(REPO_ROOT, 'backend', 'resources', 'extensions', FROZEN_TGZ_NAME);

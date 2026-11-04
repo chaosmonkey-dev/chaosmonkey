@@ -469,7 +469,7 @@ class HermeticDualInstallRolloutTest extends TestCase
 
         $hash = hash_file('sha256', $tgzPath);
         $this->assertEquals(
-            '73590be057c0c1af4d3b89f4d4e7f40223a8ccace6a28ea2cebd651ade4cb9bc',
+            '700122fbf079834591c2eb789d869238c7bf4e82872df4453e03ab312201c6ab',
             $hash,
             'Bridge tarball SHA-256 must match frozen artifact'
         );
