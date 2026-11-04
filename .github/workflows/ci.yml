@@ -1,0 +1,87 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: sqlite3, pdo_sqlite
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist
+      - name: Prepare environment
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+          touch database/database.sqlite
+      - name: Migrate
+        run: php artisan migrate --force
+      - name: Test
+        run: ./vendor/bin/phpunit
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npm run lint
+      - run: npm run test
+      - run: npm run build
+
+  extensions:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Test Claude Code bridge
+        run: |
+          cd extensions/claude-code-bridge
+          npm run check
+          node --test test/
+      - name: Test Codex bridge
+        run: cd extensions/codex-bridge && npm test
+      - name: Test Cursor agent bridge
+        run: cd extensions/cursor-agent-bridge && npm test
+      - name: Compile + test telemetry extension
+        run: |
+          cd extensions/chaosmonkey-telemetry
+          npm ci --no-audit --no-fund
+          npm test
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build -t chaosmonkey:ci .
+      - name: Smoke test
+        run: |
+          docker run -d --name cm -p 8080:80 chaosmonkey:ci
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:8080/up >/dev/null 2>&1; then
+              echo "healthy"; exit 0
+            fi
+            sleep 2
+          done
+          docker logs cm
+          echo "container did not become healthy"; exit 1

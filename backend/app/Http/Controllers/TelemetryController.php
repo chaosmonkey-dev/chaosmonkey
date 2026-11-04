@@ -1405,34 +1405,13 @@ class TelemetryController extends Controller
             $perPage = min(1000, max(1, (int) $request->query('per_page', 50))); // CR-X Phase 3: increased cap from 200 to 1000
             $includeRawMetadata = $request->query('include_raw_metadata', 'false') === 'true';
         
-        // Resolve authenticated user from bearer token if present
-        $authenticatedUserId = null;
-        $bearerToken = $request->bearerToken();
-        if ($bearerToken) {
-            try {
-                $apiToken = DB::table('api_tokens')
-                    ->where('token', hash('sha256', $bearerToken))
-                    ->where('expires_at', '>', now())
-                    ->first();
-                
-                if ($apiToken && $apiToken->user_id) {
-                    $authenticatedUserId = $apiToken->user_id;
-                    Log::info('[TELEMETRY] Sessions - resolved authenticated user', [
-                        'user_id' => $authenticatedUserId
-                    ]);
-                }
-            } catch (\Throwable $e) {
-                Log::warning('[TELEMETRY] Failed to resolve authenticated user for sessions', [
-                    'error' => $e->getMessage()
-                ]);
-            }
-        }
-        
-        // Use authenticated user if available, otherwise use query parameter
-        if ($authenticatedUserId && !$userId) {
-            $userId = $authenticatedUserId;
-        }
-        
+        // Authenticated user is resolved by SimpleTokenAuth. The org scope
+        // below is the tenant boundary; an explicit ?user_id= remains a
+        // caller-chosen filter but the caller is never silently narrowed
+        // to their own rows (that legacy behavior only made sense while
+        // the endpoint was unauthenticated).
+        $authenticatedUserId = $request->get('authenticated_user')?->id;
+
         // Build base query: session events only, excluding orphans
         $query = TelemetryEvent::where('event_type', 'session');
 

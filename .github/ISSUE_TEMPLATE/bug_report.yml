@@ -1,0 +1,36 @@
+name: Bug report
+description: Something isn't working
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. If this involves credentials or a security
+        vulnerability, please email security@chaosmonkey.dev instead.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you expected vs what you saw.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Install with `docker run ...`
+        2. Connect Cursor extension ...
+    validations:
+      required: true
+  - type: input
+    id: component
+    attributes:
+      label: Component
+      placeholder: backend / frontend / docker / cursor extension / claude bridge / codex bridge / cursor-agent bridge
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or errors
+      render: text
