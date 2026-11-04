@@ -32,10 +32,14 @@ return new class extends Migration
         // This extracts metadata->session_id into the new column
         // NOTE: This uses MySQL JSON extraction syntax. Adjust for PostgreSQL if needed.
         try {
+            $extract = DB::getDriverName() === 'sqlite'
+                ? "json_extract(metadata, '$.session_id')"
+                : "JSON_UNQUOTE(JSON_EXTRACT(metadata, '$.session_id'))";
+
             DB::statement("
-                UPDATE telemetry_events 
-                SET session_id = JSON_UNQUOTE(JSON_EXTRACT(metadata, '$.session_id'))
-                WHERE session_id IS NULL 
+                UPDATE telemetry_events
+                SET session_id = {$extract}
+                WHERE session_id IS NULL
                 AND JSON_EXTRACT(metadata, '$.session_id') IS NOT NULL
             ");
             

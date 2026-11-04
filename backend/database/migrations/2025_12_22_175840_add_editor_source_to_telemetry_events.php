@@ -28,17 +28,21 @@ return new class extends Migration
         // This attempts to extract tool identity from existing metadata
         try {
             // Try to extract from metadata->source, metadata->editor_source, metadata->tool, etc.
+            $extract = fn (string $key) => DB::getDriverName() === 'sqlite'
+                ? "json_extract(metadata, '$.{$key}')"
+                : "JSON_UNQUOTE(JSON_EXTRACT(metadata, '$.{$key}'))";
+
             DB::statement("
-                UPDATE telemetry_events 
+                UPDATE telemetry_events
                 SET editor_source = COALESCE(
-                    JSON_UNQUOTE(JSON_EXTRACT(metadata, '$.editor_source')),
-                    JSON_UNQUOTE(JSON_EXTRACT(metadata, '$.source')),
-                    JSON_UNQUOTE(JSON_EXTRACT(metadata, '$.tool')),
-                    JSON_UNQUOTE(JSON_EXTRACT(metadata, '$.ide')),
-                    JSON_UNQUOTE(JSON_EXTRACT(metadata, '$.client_source')),
-                    JSON_UNQUOTE(JSON_EXTRACT(metadata, '$.session_source'))
+                    {$extract('editor_source')},
+                    {$extract('source')},
+                    {$extract('tool')},
+                    {$extract('ide')},
+                    {$extract('client_source')},
+                    {$extract('session_source')}
                 )
-                WHERE editor_source IS NULL 
+                WHERE editor_source IS NULL
                 AND metadata IS NOT NULL
             ");
             
