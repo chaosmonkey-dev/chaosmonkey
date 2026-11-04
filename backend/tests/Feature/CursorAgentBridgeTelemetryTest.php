@@ -304,10 +304,8 @@ class CursorAgentBridgeTelemetryTest extends TestCase
         // normalizeSessionRow → computeActiveCodingDuration for non-delegated
         // tools. Bridge sessions resolve tool='cursor' → not delegated →
         // the agent file_edit span becomes "active coding duration".
-        // Public endpoint — but withToken() persists in $defaultHeaders;
-        // a bearer token narrows rows to that user_id. Clear it explicitly.
-        $this->defaultHeaders = [];
-        $sessions = $this->getJson('/api/telemetry/sessions?days=all&per_page=200');
+        // Auth-protected org-scoped read — use the admin dashboard token.
+        $sessions = $this->withToken($this->adminToken)->getJson('/api/telemetry/sessions?days=all&per_page=200');
         $sessions->assertStatus(200);
         $data = $sessions->json('data');
 
@@ -406,8 +404,7 @@ class CursorAgentBridgeTelemetryTest extends TestCase
 
         // Session feed exposes all three segments under the stable
         // conversation session_id, classified as the cursor workflow.
-        $this->defaultHeaders = [];
-        $sessions = $this->getJson('/api/telemetry/sessions?days=all&per_page=200');
+        $sessions = $this->withToken($this->adminToken)->getJson('/api/telemetry/sessions?days=all&per_page=200');
         $rows = collect($sessions->json('data'))->where('session_id', $sessionId);
         $this->assertEquals(3, $rows->count(), 'all segments must appear in the sessions feed');
         foreach ($rows as $r) {

@@ -2,10 +2,12 @@
 
 namespace Tests\Feature;
 
+use App\Models\ApiToken;
 use App\Models\Organization;
 use App\Models\TelemetryEvent;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class TelemetryTest extends TestCase
@@ -22,6 +24,23 @@ class TelemetryTest extends TestCase
     }
 
     private Organization $org;
+
+    /**
+     * Issue a dashboard-style API token for a user in the test org.
+     * Read endpoints now require SimpleTokenAuth.
+     */
+    private function dashboardToken(): string
+    {
+        $user = User::factory()->create(['organization_id' => $this->org->id]);
+        $raw = 'test-dashboard-' . Str::random(16);
+        ApiToken::create([
+            'token' => hash('sha256', $raw),
+            'user_id' => $user->id,
+            'organization_id' => $this->org->id,
+            'expires_at' => now()->addDays(30),
+        ]);
+        return $raw;
+    }
 
     public function test_telemetry_endpoint_accepts_valid_payload(): void
     {
@@ -239,7 +258,7 @@ class TelemetryTest extends TestCase
     {
         TelemetryEvent::create(['user_id'=>'u1','organization_id'=>$this->org->id,'session_id'=>'sa1','source'=>'vscode','event_type'=>'session','count'=>1,'duration_ms'=>60000,'timestamp'=>now()->subDays(30),'metadata'=>['segment_type'=>'session'],'payload'=>[],'batch_hash'=>'ha']);
         TelemetryEvent::create(['user_id'=>'u2','organization_id'=>$this->org->id,'session_id'=>'sa2','source'=>'cursor','event_type'=>'session','count'=>1,'duration_ms'=>60000,'timestamp'=>now()->subDays(2),'metadata'=>['segment_type'=>'session'],'payload'=>[],'batch_hash'=>'hb']);
-        $r=$this->getJson('/api/telemetry/sessions');
+        $r=$this->withToken($this->dashboardToken())->getJson('/api/telemetry/sessions');
         $r->assertStatus(200)->assertJsonPath('pagination.total',2)->assertJsonPath('filters_applied.days','all');
     }
 
@@ -247,7 +266,7 @@ class TelemetryTest extends TestCase
     {
         TelemetryEvent::create(['user_id'=>'u1','organization_id'=>$this->org->id,'session_id'=>'sb1','source'=>'vscode','event_type'=>'session','count'=>1,'duration_ms'=>60000,'timestamp'=>now()->subDays(30),'metadata'=>['segment_type'=>'session'],'payload'=>[],'batch_hash'=>'hc']);
         TelemetryEvent::create(['user_id'=>'u2','organization_id'=>$this->org->id,'session_id'=>'sb2','source'=>'cursor','event_type'=>'session','count'=>1,'duration_ms'=>60000,'timestamp'=>now()->subDays(2),'metadata'=>['segment_type'=>'session'],'payload'=>[],'batch_hash'=>'hd']);
-        $r=$this->getJson('/api/telemetry/sessions?days=7');
+        $r=$this->withToken($this->dashboardToken())->getJson('/api/telemetry/sessions?days=7');
         $r->assertStatus(200)->assertJsonPath('pagination.total',1)->assertJsonPath('filters_applied.days','7');
     }
 }

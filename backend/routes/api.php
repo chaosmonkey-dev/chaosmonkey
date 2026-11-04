@@ -23,12 +23,10 @@ Route::post('/auth/login', [AuthController::class, 'login'])
 Route::post('/auth/logout', [AuthController::class, 'logout'])
     ->middleware(\App\Http\Middleware\SimpleTokenAuth::class);
 
-Route::post('/upload-cursor', [CursorUsageController::class, 'upload']);
-
+// Lightweight liveness/readiness probes — intentionally public so load
+// balancers and uptime checks work without credentials.
 Route::get('/health', [PullRequestController::class, 'lightweightHealth']);
 Route::get('/version', [PullRequestController::class, 'version']);
-Route::get('/health-detailed', [PullRequestController::class, 'healthCheck']);
-Route::get('/repositories', [PullRequestController::class, 'getRepositories']);
 
 // Dashboard data endpoints — require a valid dashboard token and are
 // organization-scoped.  Invite-backed extension tokens are rejected (403)
@@ -43,28 +41,40 @@ Route::middleware(\App\Http\Middleware\SimpleTokenAuth::class)->group(function (
     Route::get('/delivery/timeseries', [PullRequestController::class, 'deliveryTimeseries']);
     // CR-X Pass 1 (F): Pilot health — read-only operational visibility
     Route::get('/pilot/health', [PilotHealthController::class, 'show']);
+
+    // Detailed health diagnostics (reveals DB/OAuth state) — auth required.
+    Route::get('/health-detailed', [PullRequestController::class, 'healthCheck']);
+    Route::get('/repositories', [PullRequestController::class, 'getRepositories']);
+
+    // Destructive data wipe — auth required (controller additionally
+    // requires the admin role).
+    Route::post('/clear-data', [PullRequestController::class, 'clearData']);
+    Route::get('/github/setup', [PullRequestController::class, 'getGithubSetup']);
+    Route::post('/github/test-connection', [PullRequestController::class, 'testGithubConnection']);
+
+    // Productivity endpoints for frontend compatibility
+    Route::get('/productivity/summary', [PullRequestController::class, 'productivitySummary']);
+    Route::get('/productivity/trends', [PullRequestController::class, 'productivityTrends']);
+
+    // Legacy Cursor usage file ingest — auth required (dashboard token).
+    Route::post('/upload-cursor', [CursorUsageController::class, 'upload']);
+
+    // Telemetry query routes — org-scoped dashboard reads. All return data
+    // only for the authenticated user's organization.
+    Route::get('/telemetry', [TelemetryController::class, 'index']);
+    Route::get('/telemetry/orphan-stats', [TelemetryController::class, 'orphanStats']);
+    Route::get('/telemetry/sessions', [TelemetryController::class, 'sessions']);
+    Route::get('/telemetry/aggregated', [TelemetryController::class, 'aggregated']);
+    // /telemetry/repos and /telemetry/canonical are in the protected group above
+    // identity-coverage route removed — was exposing invite emails and dev display names publicly
 });
 
-Route::post('/clear-data', [PullRequestController::class, 'clearData']);
-Route::get('/github/setup', [PullRequestController::class, 'getGithubSetup']);
-Route::post('/github/test-connection', [PullRequestController::class, 'testGithubConnection']);
-
-// Productivity endpoints for frontend compatibility
-Route::get('/productivity/summary', [PullRequestController::class, 'productivitySummary']);
-Route::get('/productivity/trends', [PullRequestController::class, 'productivityTrends']);
-
-// Telemetry ingestion routes (public for eng leader deployments)
+// Telemetry ingestion routes — token-authenticated inside the controller.
+// Extension/bridge clients present their installation or invite-backed API
+// token as a bearer credential; the controller resolves it via the shared
+// token authority and fails closed for 0.4.0+ payloads without one.
 Route::post('/telemetry/upload', [TelemetryController::class, 'upload']);
 Route::post('/telemetry', [TelemetryController::class, 'store']);
-
-// Telemetry query routes (public for eng leader deployments)
-Route::get('/telemetry', [TelemetryController::class, 'index']);
-// /telemetry/repos moved to SimpleTokenAuth-protected group above (CR-X 2C org isolation)
-Route::get('/telemetry/orphan-stats', [TelemetryController::class, 'orphanStats']);
-Route::get('/telemetry/sessions', [TelemetryController::class, 'sessions']);
-Route::get('/telemetry/aggregated', [TelemetryController::class, 'aggregated']);
-// /telemetry/canonical moved to SimpleTokenAuth-protected group above
-// identity-coverage route removed — was exposing invite emails and dev display names publicly
 
 // Public telemetry test endpoint
 Route::get('/telemetry/test', fn() => response()->json(['status' => 'ready']));
@@ -120,11 +130,15 @@ use App\Http\Controllers\OrganizationController;
 Route::get('/atlassian/oauth/redirect', [AtlassianOAuthController::class, 'redirectToAtlassian']);
 Route::get('/atlassian/oauth/callback', [AtlassianOAuthController::class, 'handleCallback']);
 
-// GitHub Metric Details - Drilldown for metric cards
-Route::get('/github/metric-details', [GitHubMetricDetailsController::class, 'getMetricDetails']);
+// GitHub metric drilldown endpoints — dashboard reads, require a valid
+// dashboard token (invite-backed tokens are rejected by SimpleTokenAuth).
+Route::middleware(\App\Http\Middleware\SimpleTokenAuth::class)->group(function () {
+    // GitHub Metric Details - Drilldown for metric cards
+    Route::get('/github/metric-details', [GitHubMetricDetailsController::class, 'getMetricDetails']);
 
-// Fast repositories endpoint for drilldown (bypasses heavy metrics processing)
-Route::get('/github/repositories-simple', [GitHubMetricDetailsController::class, 'getRepositoriesSimple']);
+    // Fast repositories endpoint for drilldown (bypasses heavy metrics processing)
+    Route::get('/github/repositories-simple', [GitHubMetricDetailsController::class, 'getRepositoriesSimple']);
+});
 
 // Test route to verify controller loading
 Route::get('/test-oauth', function() {

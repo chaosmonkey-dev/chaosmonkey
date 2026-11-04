@@ -1102,11 +1102,36 @@ class TelemetryController extends Controller
         }
     }
 
+    /**
+     * Apply the canonical read-side organization scope to a telemetry query.
+     *
+     * Mirrors the org filter in buildCanonicalQuery(): in Local Lab mode
+     * (APP_ENV=local) all organizations are visible; otherwise the request
+     * is constrained to the authenticated user's organization (resolved by
+     * SimpleTokenAuth) and fails closed when no organization can be proven.
+     *
+     * @param \Illuminate\Database\Eloquent\Builder $query
+     */
+    private function applyReadOrgScope($query, Request $request): void
+    {
+        if (config('app.env') === 'local') {
+            // Local Lab: include all organizations — full historical population
+            return;
+        }
+
+        $organizationId = $request->get('authenticated_user')?->organization_id;
+        if ($organizationId) {
+            $query->where('organization_id', $organizationId);
+        } else {
+            // Fail closed: no provable organization → empty result set
+            $query->whereRaw('1 = 0');
+        }
+    }
+
     public function index(Request $request)
     {
         try {
-            // PUBLIC ACCESS: No user authentication for eng leader deployments
-            
+            // Auth required via SimpleTokenAuth; results are org-scoped below.
             $limit = (int) $request->query('limit', 100);
             $limit = max(1, min($limit, 500)); // Cap at 500 to prevent overload
             $source = $request->query('source');
@@ -1143,13 +1168,10 @@ class TelemetryController extends Controller
         // Only filter by event_type if explicitly requested via query parameter
         $query = TelemetryEvent::query()->orderByDesc('timestamp');
 
-        // PUBLIC ACCESS: No authentication required for eng leader deployments
-        // All telemetry data is accessible without organization filtering
-        Log::debug('[TelemetryController] Public access - no authentication required');
-
-        // PUBLIC ACCESS: No session filtering for eng leader deployments
-        // All telemetry events are accessible without orphan filtering
-        Log::debug('[TelemetryController] Public access - including all events');
+        // Organization scope — same rules as buildCanonicalQuery():
+        // Local Lab sees all orgs; otherwise constrained to the
+        // authenticated user's organization (fails closed).
+        $this->applyReadOrgScope($query, $request);
 
         if (!empty($source)) {
             $query->where('source', $source);
@@ -1317,15 +1339,20 @@ class TelemetryController extends Controller
             }
         }
         
-        // PUBLIC ACCESS: No organization isolation for eng leader deployments
-        // All telemetry data is accessible without filtering
-        // CR-X GLOO: do not default to org 1 on read paths either —
-        // resolves org from authenticated user or explicit param only.
-        $organizationId = $request->input('organization_id');
+        // Organization scope — same rules as buildCanonicalQuery():
+        // Local Lab may pass an explicit organization_id; otherwise the
+        // scope comes from the authenticated user only. Never trust a
+        // client-supplied organization_id outside Local Lab, and fail
+        // closed to an impossible org id when none can be proven.
+        if (config('app.env') === 'local') {
+            $organizationId = $request->input('organization_id');
+        } else {
+            $organizationId = $request->get('authenticated_user')?->organization_id ?? -1;
+        }
         $stats = TelemetryEvent::getOrphanRateStats($days, $organizationId);
         $breakdown = TelemetryEvent::getOrphanBreakdown($days, $organizationId);
-        
-        Log::debug('[TelemetryController] Public access - orphan stats', [
+
+        Log::debug('[TelemetryController] Orphan stats requested', [
             'organization_id' => $organizationId
         ]);
         
@@ -1408,9 +1435,12 @@ class TelemetryController extends Controller
         
         // Build base query: session events only, excluding orphans
         $query = TelemetryEvent::where('event_type', 'session');
-        
-        // PUBLIC ACCESS: No authentication required for eng leader deployments
-        // All telemetry data is accessible without organization filtering
+
+        // Organization scope — same rules as buildCanonicalQuery():
+        // Local Lab sees all orgs; otherwise constrained to the
+        // authenticated user's organization (fails closed).
+        $this->applyReadOrgScope($query, $request);
+
         Log::debug('[TelemetryController] Sessions access', [
             'authenticated_user_id' => $authenticatedUserId,
             'query_user_id' => $userId,
@@ -1891,7 +1921,12 @@ class TelemetryController extends Controller
             // Build base query for session events only
             $query = TelemetryEvent::where('event_type', 'session')
                 ->whereBetween('timestamp', [$fromDate, $toDate]);
-            
+
+            // Organization scope — same rules as buildCanonicalQuery():
+            // Local Lab sees all orgs; otherwise constrained to the
+            // authenticated user's organization (fails closed).
+            $this->applyReadOrgScope($query, $request);
+
             // Count total records scanned (for metadata)
             $recordsScanned = (clone $query)->count();
             $sessionRowsScanned = $recordsScanned; // Same for session-only query

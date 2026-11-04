@@ -87,14 +87,17 @@ class SimpleTokenAuth
             return response()->json(['error' => 'Invalid or expired API token'], 401);
         }
 
-        // Invite-backed tokens are restricted to telemetry ingestion + renewal
+        // Invite-backed tokens are restricted to telemetry ingestion + renewal.
+        // The allowlist is method-scoped (POST only) so an invite token can
+        // never read back org telemetry via the GET routes that share these
+        // paths.
         if ($apiToken->invite_id) {
             $telemetryOnlyPaths = [
                 'api/telemetry',
                 'api/telemetry/upload',
                 'api/ide/connect/renew',
             ];
-            if (!in_array($request->path(), $telemetryOnlyPaths)) {
+            if (!$request->isMethod('POST') || !in_array($request->path(), $telemetryOnlyPaths)) {
                 return response()->json([
                     'error' => 'Invite-backed tokens are only valid for telemetry ingestion',
                     'error_code' => 'TELEMETRY_ONLY_TOKEN',

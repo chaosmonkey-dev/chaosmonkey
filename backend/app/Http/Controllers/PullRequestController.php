@@ -7590,8 +7590,18 @@ return response()->json([
 
     public function clearData(Request $request)
     {
+        // Destructive wipe — requires a dashboard token (SimpleTokenAuth)
+        // AND an explicit admin role. Fails closed when the role is absent.
+        $user = $request->get('authenticated_user');
+        if (!$user || ($user->role ?? null) !== 'admin') {
+            return response()->json([
+                'error' => 'Insufficient permissions',
+                'message' => 'Only organization admins can clear data',
+            ], 403);
+        }
+
         $type = $request->input('type', 'all');
-        
+
         try {
             switch ($type) {
                 case 'pull_requests':
