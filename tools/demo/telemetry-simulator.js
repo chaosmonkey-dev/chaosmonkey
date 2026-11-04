@@ -10,7 +10,9 @@
  *   node telemetry-simulator.js [options]
  *   
  * Options:
- *   --url http://127.0.0.1:8010/api/telemetry  Backend endpoint
+ *   --url http://127.0.0.1:8010                Backend base URL
+ *   --token <token>                            Bearer token from connect-code exchange
+ *   --installation-id <uuid>                   Installation ID registered at exchange
  *   --count 100                                 Number of events to send
  *   --sessions 10                               Number of sessions to simulate
  *   --ides cursor,windsurf,vscode              IDEs to simulate
@@ -29,18 +31,35 @@ const config = {
         ? process.argv[process.argv.indexOf('--url') + 1] 
         : 'http://127.0.0.1:8010',
     
-    eventCount: parseInt(process.argv[process.argv.indexOf('--count') + 1] || '100'),
-    sessionCount: parseInt(process.argv[process.argv.indexOf('--sessions') + 1] || '10'),
-    
+    eventCount: process.argv.includes('--count')
+        ? parseInt(process.argv[process.argv.indexOf('--count') + 1])
+        : 100,
+    sessionCount: process.argv.includes('--sessions')
+        ? parseInt(process.argv[process.argv.indexOf('--sessions') + 1])
+        : 10,
+
     ides: process.argv.includes('--ides')
         ? process.argv[process.argv.indexOf('--ides') + 1].split(',')
         : ['cursor', 'windsurf', 'vscode'],
-    
-    delay: parseInt(process.argv[process.argv.indexOf('--delay') + 1] || '1000'),
-    batchSize: parseInt(process.argv[process.argv.indexOf('--batch-size') + 1] || '20'),
+
+    delay: process.argv.includes('--delay')
+        ? parseInt(process.argv[process.argv.indexOf('--delay') + 1])
+        : 1000,
+    batchSize: process.argv.includes('--batch-size')
+        ? parseInt(process.argv[process.argv.indexOf('--batch-size') + 1])
+        : 20,
     verbose: process.argv.includes('--verbose'),
-    dryRun: process.argv.includes('--dry-run')
+    dryRun: process.argv.includes('--dry-run'),
+
+    token: process.argv.includes('--token')
+        ? process.argv[process.argv.indexOf('--token') + 1]
+        : null,
+    installationId: process.argv.includes('--installation-id')
+        ? process.argv[process.argv.indexOf('--installation-id') + 1]
+        : null
 };
+
+const EXTENSION_VERSION = '0.4.1';
 
 // Data generators
 const developers = [
@@ -104,7 +123,8 @@ function generateFileEditEvent(sessionId, source) {
         metadata: {
             session_id: sessionId,
             source: source,
-            extension_version: '0.3.1',
+            installation_id: config.installationId,
+            extension_version: EXTENSION_VERSION,
             file_path: generateFilePath(),
             language: randomChoice(['typescript', 'javascript', 'php', 'python', 'go']),
             lines_added: randomInt(1, 100),
@@ -124,7 +144,8 @@ function generateAiAcceptEvent(sessionId, source) {
         metadata: {
             session_id: sessionId,
             source: source,
-            extension_version: '0.3.1',
+            installation_id: config.installationId,
+            extension_version: EXTENSION_VERSION,
             ai_provider: randomChoice(['github-copilot', 'claude', 'cursor-ai']),
             suggestion_type: randomChoice(['completion', 'edit', 'refactor']),
             confidence_score: randomFloat(0.6, 1.0),
@@ -143,7 +164,8 @@ function generateCommitEvent(sessionId, source) {
         metadata: {
             session_id: sessionId,
             source: source,
-            extension_version: '0.3.1',
+            installation_id: config.installationId,
+            extension_version: EXTENSION_VERSION,
             commit_hash: Math.random().toString(36).substring(2, 12),
             commit_message: randomChoice([
                 'feat: add new feature',
@@ -176,7 +198,8 @@ function generateSessionEvent(sessionId, source, sessionDuration) {
         metadata: {
             session_id: sessionId,
             source: source,
-            extension_version: '0.3.1',
+            installation_id: config.installationId,
+            extension_version: EXTENSION_VERSION,
             segment_type: 'session',
             end_reason: randomChoice(['idle', 'shutdown']),
             session_quality_band: qualityScore > 0.7 ? 'high' : qualityScore > 0.4 ? 'medium' : 'low',
@@ -270,16 +293,22 @@ async function simulateTelemetry() {
         
         const payload = {
             source: source,
+            installation_id: config.installationId,
             events: batch
         };
-        
+
+        const headers = {
+            'Content-Type': 'application/json',
+            'X-Request-Id': `sim-${Date.now()}-${i}`
+        };
+        if (config.token) {
+            headers['Authorization'] = `Bearer ${config.token}`;
+        }
+
         try {
             const response = await fetch(`${config.baseUrl}/api/telemetry`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-Request-Id': `sim-${Date.now()}-${i}`
-                },
+                headers,
                 body: JSON.stringify(payload)
             });
             
@@ -330,7 +359,9 @@ ChaosMonkey Telemetry Simulator
 Usage: node telemetry-simulator.js [options]
 
 Options:
-  --url <url>           Backend endpoint (default: http://127.0.0.1:8010)
+  --url <url>           Backend base URL (default: http://127.0.0.1:8010)
+  --token <token>       Bearer token from POST /api/ide/connect/exchange
+  --installation-id <uuid>  Installation ID registered at exchange
   --count <number>      Number of events to generate (default: 100)
   --sessions <number>   Number of sessions to simulate (default: 10)
   --ides <csv>          IDEs to simulate (default: cursor,windsurf,vscode)
