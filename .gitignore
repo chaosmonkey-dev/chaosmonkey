@@ -40,3 +40,5 @@ extensions/*/*.vsix
 extensions/*/*.tgz
 extensions/*/dist/
 extensions/*/out/
+dev/pids/
+dev/logs/
