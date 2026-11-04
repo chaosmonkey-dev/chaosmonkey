@@ -506,6 +506,9 @@ class CanonicalCohortFilterTest extends TestCase
         $this->createSessionEvent("invite:{$member->id}", 'codex', $this->organizationId);
         $this->createSessionEvent("invite:{$member->id}", 'codex-cli', $this->organizationId);
         $this->createSessionEvent("invite:{$member->id}", 'cursor', $this->organizationId);
+        // Fixture timestamps must fall inside the query window below
+        TelemetryEvent::where('organization_id', $this->organizationId)
+            ->update(['timestamp' => '2026-09-15T12:00:00Z']);
 
         $qs = "from=2020-01-01&to=2026-10-01T23:59:59.999Z&format=aggregated&period=day"
             . "&group_by=developer&reporting_timezone=America/New_York"

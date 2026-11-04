@@ -326,8 +326,12 @@ class RolloutClaimTest extends TestCase
 
         $token = $this->getRolloutToken([$email]);
 
-        // Delete the auto-issued connect code
-        IDEConnectCode::where('invite_id', $invite->id)->delete();
+        // Delete the auto-issued connect codes for every invite matching this email
+        // (the bulk endpoint mints its own invite, so scope by email, not invite id)
+        $inviteIds = Invite::where('organization_id', $this->organization->id)
+            ->whereRaw('LOWER(email) = ?', [$email])
+            ->pluck('id');
+        IDEConnectCode::whereIn('invite_id', $inviteIds)->delete();
 
         $response = $this->postJson('/api/rollouts/' . $token . '/claim', [
             'email' => $email,
