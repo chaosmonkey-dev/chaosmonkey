@@ -38,7 +38,13 @@ class DatabaseSafetyGuardTest extends TestCase
      */
     public function test_approved_ephemeral_test_path_is_accepted(): void
     {
-        $path = base_path(DatabaseSafety::TEST_TEMP_ROOT) . '/test_safety.sqlite';
+        // The guard requires the parent dir to resolve — ensure it exists on
+        // fresh checkouts where no test has created it yet.
+        $root = base_path(DatabaseSafety::TEST_TEMP_ROOT);
+        if (!is_dir($root)) {
+            mkdir($root, 0777, true);
+        }
+        $path = $root . '/test_safety.sqlite';
         $this->assertTrue(DatabaseSafety::isApprovedEphemeralTestTarget($path));
     }
 
