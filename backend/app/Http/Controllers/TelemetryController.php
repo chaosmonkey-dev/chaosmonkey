@@ -449,6 +449,17 @@ class TelemetryController extends Controller
     }
     public function upload(Request $request)
     {
+        // FAIL CLOSED: same anonymous-ingest policy as store() — a bearer
+        // token, a dashboard session, or explicit opt-in is required.
+        $uploadToken = $request->bearerToken()
+            ? $this->resolveToken($request->bearerToken())
+            : null;
+        if (!$uploadToken
+            && !Auth::check()
+            && !config('telemetry.allow_anonymous_ingest', false)) {
+            return response()->json(['error' => 'Telemetry ingestion requires a valid bearer token.'], 401);
+        }
+
         Log::info('Telemetry upload endpoint hit');
         // Check if a file was uploaded with 'telemetry' field name
         $file = $request->file('telemetry');
@@ -772,6 +783,25 @@ class TelemetryController extends Controller
                 'status' => 'error',
                 'message' => 'Authentication required for extension version 0.4.0+. Provide a valid bearer token.',
                 'error_code' => 'AUTH_REQUIRED_V040'
+            ], 401);
+        }
+
+        // FAIL CLOSED: anonymous ingestion is disabled by default. Without
+        // this, any caller could write events into any organization via a
+        // forged organization_id or user_id (see Options A/C below).
+        // Legacy pre-0.4.0 clients on migrated installs may re-enable the
+        // anonymous path via TELEMETRY_ALLOW_ANONYMOUS_INGEST.
+        if (!$resolvedApiToken
+            && !Auth::check()
+            && !config('telemetry.allow_anonymous_ingest', false)) {
+            Log::warning('[TELEMETRY] Rejecting unauthenticated telemetry', [
+                'source' => $source,
+                'has_organization_id' => !empty($organizationId),
+            ]);
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Telemetry ingestion requires a valid bearer token.',
+                'error_code' => 'AUTH_REQUIRED'
             ], 401);
         }
 

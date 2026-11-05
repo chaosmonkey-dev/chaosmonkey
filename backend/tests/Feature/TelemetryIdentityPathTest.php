@@ -137,6 +137,9 @@ class TelemetryIdentityPathTest extends TestCase
      */
     public function test_legacy_session_has_null_identity(): void
     {
+        // Legacy anonymous path — explicitly enabled (disabled by default).
+        config(['telemetry.allow_anonymous_ingest' => true]);
+
         $payload = [
             'source' => 'vscode',
             'editor_source' => 'vscode',
@@ -225,6 +228,9 @@ class TelemetryIdentityPathTest extends TestCase
      */
     public function test_no_identity_inferred_from_user_id_or_git(): void
     {
+        // Legacy anonymous path — explicitly enabled (disabled by default).
+        config(['telemetry.allow_anonymous_ingest' => true]);
+
         $payload = [
             'source' => 'vscode',
             'editor_source' => 'vscode',
@@ -349,5 +355,86 @@ class TelemetryIdentityPathTest extends TestCase
         $this->assertStringNotContainsString('exception', $body);
         $this->assertStringNotContainsString('trace', $body);
         $this->assertStringNotContainsString('ORGANIZATION_NOT_FOUND', $body);
+    }
+
+    /**
+     * TEST: A forged organization_id cannot smuggle anonymous writes into
+     * a real tenant's organization (the historical Option-A path).
+     */
+    public function test_unauthenticated_forged_organization_id_is_denied(): void
+    {
+        $org = Organization::create(['name' => 'Victim Org', 'slug' => 'victim-org-' . Str::random(6)]);
+
+        $before = TelemetryEvent::count();
+
+        $response = $this->postJson('/api/telemetry', [
+            'source' => 'vscode',
+            'organization_id' => $org->id,
+            'events' => [
+                [
+                    'event_type' => 'session',
+                    'count' => 1,
+                    'metadata' => ['session_id' => 'forged-org-001'],
+                ],
+            ],
+        ]);
+
+        $response->assertStatus(401);
+        $this->assertSame($before, TelemetryEvent::count(), 'Forged org write must be denied before attribution');
+    }
+
+    /**
+     * TEST: A forged user_id matching a real user's github_id cannot write
+     * into that user's organization (the historical Option-C path).
+     */
+    public function test_unauthenticated_forged_user_identity_is_denied(): void
+    {
+        $org = Organization::create(['name' => 'Identity Org', 'slug' => 'identity-org-' . Str::random(6)]);
+        User::create([
+            'name' => 'Real User',
+            'email' => 'real-' . Str::random(6) . '@test.com',
+            'github_id' => 'gh-real-123',
+            'organization_id' => $org->id,
+        ]);
+
+        $before = TelemetryEvent::count();
+
+        $response = $this->postJson('/api/telemetry', [
+            'source' => 'vscode',
+            'user_id' => 'gh-real-123',
+            'events' => [
+                [
+                    'event_type' => 'session',
+                    'count' => 1,
+                    'metadata' => ['session_id' => 'forged-user-001'],
+                ],
+            ],
+        ]);
+
+        $response->assertStatus(401);
+        $this->assertSame($before, TelemetryEvent::count(), 'Forged identity write must be denied before attribution');
+    }
+
+    /**
+     * TEST: Opt-in restores the legacy anonymous path for migrated installs.
+     */
+    public function test_anonymous_ingest_opt_in_restores_legacy_acceptance(): void
+    {
+        config(['telemetry.allow_anonymous_ingest' => true]);
+
+        $response = $this->postJson('/api/telemetry', [
+            'source' => 'vscode',
+            'user_id' => 'legacy-user-optin',
+            'events' => [
+                [
+                    'event_type' => 'session',
+                    'count' => 1,
+                    'metadata' => ['session_id' => 'legacy-optin-001'],
+                ],
+            ],
+        ]);
+
+        $response->assertStatus(200);
+        $this->assertDatabaseHas('telemetry_events', ['session_id' => 'legacy-optin-001']);
     }
 }

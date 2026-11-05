@@ -456,6 +456,9 @@ class InviteBackedIdentityTest extends TestCase
      */
     public function test_legacy_telemetry_preserved_without_token(): void
     {
+        // Legacy anonymous path — explicitly enabled (disabled by default).
+        config(['telemetry.allow_anonymous_ingest' => true]);
+
         [$org] = $this->seedOrgAndInvite();
 
         $payload = [
