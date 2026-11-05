@@ -13,7 +13,7 @@ RUN npm run build
 # ---------------------------------------------------------------------------
 # Stage 2: composer dependencies (production only)
 # ---------------------------------------------------------------------------
-FROM php:8.2-cli-alpine AS vendor
+FROM php:8.5-cli-alpine AS vendor
 RUN apk add --no-cache git unzip
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 WORKDIR /build/backend
@@ -28,7 +28,7 @@ RUN composer install \
 # ---------------------------------------------------------------------------
 # Stage 3: runtime — PHP-FPM + nginx + SQLite (all-in-one)
 # ---------------------------------------------------------------------------
-FROM php:8.2-fpm-alpine AS app
+FROM php:8.5-fpm-alpine AS app
 
 RUN apk add --no-cache \
       nginx \
