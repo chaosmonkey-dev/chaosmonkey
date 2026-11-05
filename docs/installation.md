@@ -66,9 +66,9 @@ docker compose exec chaosmonkey \
 
 ## Configuration
 
-Configuration is the backend `.env` inside the container
-(`/var/www/backend/.env`), writable on first start and preserved across
-restarts. You can also pass common settings with `docker -e` — the entrypoint
+Configuration lives in `/data/.env` on the persistent volume (symlinked into
+the app at `/var/www/backend/.env`), writable on first start and preserved
+across container replacement. You can also pass common settings with `docker -e` — the entrypoint
 applies them on every boot:
 
 | Variable | Default | Purpose |
@@ -77,6 +77,7 @@ applies them on every boot:
 | `APP_FRONTEND_URL` | `http://localhost:8080` | Used for CORS + OAuth redirects |
 | `CORS_ALLOWED_ORIGINS` | `APP_FRONTEND_URL` | Comma-separated allowed origins |
 | `SESSION_SECURE_COOKIES` | `false` | Set `true` behind HTTPS |
+| `APP_KEY` | generated once | Encryption key, persisted in `/data/.env`; may be pinned via `-e` |
 | `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | unset | Optional GitHub OAuth |
 | `GITHUB_APP_*` | unset | Optional GitHub App (see integrations) |
 | `ATLASSIAN_CLIENT_ID` / `ATLASSIAN_CLIENT_SECRET` | unset | Optional |

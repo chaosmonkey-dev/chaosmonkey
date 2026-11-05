@@ -7,19 +7,25 @@ set -e
 APP_DIR=/var/www/backend
 DATA_DIR=/data
 DB_FILE="$DATA_DIR/database.sqlite"
-ENV_FILE="$APP_DIR/.env"
+# .env is canonical on the persistent volume so APP_KEY (and operator edits)
+# survive container replacement and upgrades.
+ENV_FILE="$DATA_DIR/.env"
+APP_ENV_LINK="$APP_DIR/.env"
 
 mkdir -p "$DATA_DIR"
 
 # ---------------------------------------------------------------------------
-# .env — generated once from .env.example, then owned by the operator.
-# CHAOSMONKEY_* / common env vars passed with `docker -e` are applied on every
-# start so operators can configure without editing the file.
+# .env — generated once on the /data volume, then owned by the operator.
+# The app dir gets a symlink so Laravel loads it normally. CHAOSMONKEY_* /
+# common env vars passed with `docker -e` are applied on every start.
 # ---------------------------------------------------------------------------
 if [ ! -f "$ENV_FILE" ]; then
     cp "$APP_DIR/.env.example" "$ENV_FILE"
     echo "[entrypoint] Created $ENV_FILE from .env.example"
 fi
+chmod 600 "$ENV_FILE" 2>/dev/null || true
+chown www-data:www-data "$ENV_FILE" 2>/dev/null || true
+ln -sfn "$ENV_FILE" "$APP_ENV_LINK"
 
 set_env() {
     key="$1"; value="$2"
@@ -42,7 +48,7 @@ set_env QUEUE_CONNECTION sync
 set_env LOG_CHANNEL stderr
 
 # Operator-supplied configuration (docker -e VAR=value)
-for var in APP_NAME APP_URL APP_FRONTEND_URL \
+for var in APP_NAME APP_URL APP_FRONTEND_URL APP_KEY \
            GITHUB_CLIENT_ID GITHUB_CLIENT_SECRET GITHUB_TOKEN GITHUB_OAUTH_REDIRECT \
            GITHUB_APP_ID GITHUB_APP_INSTALLATION_ID GITHUB_APP_PRIVATE_KEY \
            GITHUB_APP_WEBHOOK_SECRET \
@@ -66,7 +72,8 @@ if grep -q 'CORS_ALLOWED_ORIGINS=http://localhost:5174' "$ENV_FILE"; then
 fi
 
 # ---------------------------------------------------------------------------
-# APP_KEY — generate once, persist in .env (encrypted data stays decryptable)
+# APP_KEY — generate once into /data/.env; persisted so encrypted data and
+# sessions survive container replacement. Operators may pin APP_KEY via -e.
 # ---------------------------------------------------------------------------
 if ! grep -q '^APP_KEY=base64:' "$ENV_FILE"; then
     cd "$APP_DIR"

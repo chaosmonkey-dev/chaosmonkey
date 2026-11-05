@@ -22,14 +22,26 @@ the simplest correct method):
 docker exec chaosmonkey sqlite3 /data/database.sqlite ".backup /data/backup.sqlite"
 docker cp chaosmonkey:/data/backup.sqlite ./chaosmonkey-backup-$(date +%F).sqlite
 docker exec chaosmonkey rm /data/backup.sqlite
+# also back up the persistent .env — it holds APP_KEY
+docker cp chaosmonkey:/data/.env ./chaosmonkey-env-backup-$(date +%F)
 ```
 
-Or back up the whole volume:
+Or back up the whole volume — this is the recommended method since it
+captures both the database and `.env` (which contains `APP_KEY`):
 
 ```bash
 docker run --rm -v chaosmonkey-data:/data -v "$PWD":/backup alpine \
   tar czf /backup/chaosmonkey-data-$(date +%F).tgz -C /data .
 ```
+
+> **APP_KEY persistence**: the container's `.env` lives on the `/data` volume
+> (`/data/.env`, symlinked into the app). `APP_KEY` is generated once on first
+> boot and survives container replacement and upgrades — it protects all
+> encrypted data and session cookies. If `APP_KEY` is lost, encrypted data
+> cannot be recovered and all sessions are invalidated. You may pin it
+> explicitly with `docker -e APP_KEY=base64:...` (generate one via
+> `php artisan key:generate --show`). Keep backups of `/data/.env` safe — it
+> is a secret.
 
 ## Restore
 
