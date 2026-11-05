@@ -309,4 +309,45 @@ class TelemetryIdentityPathTest extends TestCase
         $response->assertStatus(401);
         $response->assertJson(['error_code' => 'AUTH_REQUIRED_V040']);
     }
+
+    /**
+     * TEST: Unauthenticated ingest on a fresh install (no legacy fallback
+     * org) is denied with 401 — nothing stored, no internals disclosed.
+     */
+    public function test_unauthenticated_ingest_on_fresh_install_returns_401(): void
+    {
+        // Simulate a fresh OSS install: no 'chaosmonkey' fallback org exists.
+        Organization::where('slug', 'chaosmonkey')->update(['slug' => 'test-org']);
+
+        $before = TelemetryEvent::count();
+
+        $payload = [
+            'source' => 'vscode',
+            'user_id' => 'dev-user-vscode',
+            'events' => [
+                [
+                    'event_type' => 'session',
+                    'count' => 1,
+                    'duration_ms' => 60000,
+                    'timestamp' => now()->toISOString(),
+                    'metadata' => [
+                        'source' => 'vscode',
+                        'segment_type' => 'session',
+                        'session_id' => 'session_unauth_001',
+                    ],
+                ],
+            ],
+        ];
+
+        $response = $this->postJson('/api/telemetry', $payload);
+
+        $response->assertStatus(401);
+        $response->assertJson(['error_code' => 'AUTH_REQUIRED']);
+        $this->assertSame($before, TelemetryEvent::count(), 'Denied request must not store events');
+
+        $body = $response->getContent();
+        $this->assertStringNotContainsString('exception', $body);
+        $this->assertStringNotContainsString('trace', $body);
+        $this->assertStringNotContainsString('ORGANIZATION_NOT_FOUND', $body);
+    }
 }

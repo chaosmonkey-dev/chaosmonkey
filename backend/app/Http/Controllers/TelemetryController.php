@@ -859,15 +859,18 @@ class TelemetryController extends Controller
                 // User not found or has no org → fallback to ChaosMonkey
                 $chaosMonkeyOrg = DB::table('organizations')->where('slug', 'chaosmonkey')->first();
                 if (!$chaosMonkeyOrg) {
-                    Log::error('[TELEMETRY] ChaosMonkey organization not found during fallback', [
+                    // Fresh installs have no legacy fallback org, so
+                    // unauthenticated telemetry cannot be attributed.
+                    // Deny it instead of failing with a 500.
+                    Log::warning('[TELEMETRY] Rejecting unauthenticated telemetry: no fallback organization', [
                         'user_id' => $userId,
                     ]);
-                    
+
                     return response()->json([
                         'status' => 'error',
-                        'message' => 'Default organization not found',
-                        'error_code' => 'ORGANIZATION_NOT_FOUND'
-                    ], 500);
+                        'message' => 'Telemetry ingestion requires a valid bearer token.',
+                        'error_code' => 'AUTH_REQUIRED'
+                    ], 401);
                 }
                 $targetOrganizationId = $chaosMonkeyOrg->id;
                 Log::warning('[TELEMETRY] User not found, fell back to ChaosMonkey', [
