@@ -133,10 +133,13 @@ class TelemetryIdentityPathTest extends TestCase
     }
 
     /**
-     * TEST: Legacy session (pre-0.4.0) — identity fields remain null/schema 0
+     * TEST: Legacy session (pre-0.4.0) without authentication is denied —
+     * anonymous ingestion is not accepted regardless of payload shape.
      */
-    public function test_legacy_session_has_null_identity(): void
+    public function test_legacy_session_without_auth_is_denied(): void
     {
+        $before = TelemetryEvent::count();
+
         $payload = [
             'source' => 'vscode',
             'editor_source' => 'vscode',
@@ -160,22 +163,9 @@ class TelemetryIdentityPathTest extends TestCase
         ];
 
         $response = $this->postJson('/api/telemetry', $payload);
-        $response->assertStatus(200);
-
-        // Query canonical sessions
-        $canonical = $this->withHeaders(['Authorization' => 'Bearer ' . $this->dashboardToken])
-            ->getJson('/api/telemetry/canonical?format=sessions');
-        $canonical->assertStatus(200);
-
-        $sessions = $canonical->json('data') ?? $canonical->json('sessions') ?? [];
-        $this->assertNotEmpty($sessions, 'Canonical should return at least one session');
-
-        $session = $sessions[0];
-        $this->assertNull($session['installation_id'], 'Legacy session installation_id should be null');
-        $this->assertNull($session['developer_id'], 'Legacy session developer_id should be null');
-        $this->assertNull($session['team_id'], 'Legacy session team_id should be null');
-        $this->assertEquals(0, $session['identity_schema_version'], 'Legacy session should have schema version 0');
-        $this->assertEquals('legacy_unknown', $session['identity_source'], 'Legacy session should have legacy_unknown source');
+        $response->assertStatus(401);
+        $response->assertJson(['error_code' => 'AUTH_REQUIRED']);
+        $this->assertSame($before, TelemetryEvent::count(), 'Anonymous legacy payload must not be stored');
     }
 
     /**
@@ -221,10 +211,13 @@ class TelemetryIdentityPathTest extends TestCase
     }
 
     /**
-     * TEST: No identity is inferred from user_id, email, Git or machine details
+     * TEST: No identity is inferred from user_id, email, Git or machine
+     * details — and no ingest occurs without authentication.
      */
-    public function test_no_identity_inferred_from_user_id_or_git(): void
+    public function test_no_identity_inferred_from_unauthenticated_payload(): void
     {
+        $before = TelemetryEvent::count();
+
         $payload = [
             'source' => 'vscode',
             'editor_source' => 'vscode',
@@ -250,22 +243,9 @@ class TelemetryIdentityPathTest extends TestCase
         ];
 
         $response = $this->postJson('/api/telemetry', $payload);
-        $response->assertStatus(200);
-
-        $canonical = $this->withHeaders(['Authorization' => 'Bearer ' . $this->dashboardToken])
-            ->getJson('/api/telemetry/canonical?format=sessions');
-        $canonical->assertStatus(200);
-
-        $sessions = $canonical->json('data') ?? $canonical->json('sessions') ?? [];
-        $this->assertNotEmpty($sessions);
-
-        $session = $sessions[0];
-        // Identity must NOT be inferred from user_id or git context
-        $this->assertNull($session['installation_id'], 'installation_id must not be inferred from user_id');
-        $this->assertNull($session['developer_id'], 'developer_id must not be inferred from user_id or git');
-        $this->assertNull($session['team_id'], 'team_id must not be inferred from user_id or git');
-        $this->assertEquals(0, $session['identity_schema_version'], 'Schema version should be 0 for legacy session');
-        $this->assertEquals('legacy_unknown', $session['identity_source'], 'Source should be legacy_unknown');
+        $response->assertStatus(401);
+        $response->assertJson(['error_code' => 'AUTH_REQUIRED']);
+        $this->assertSame($before, TelemetryEvent::count(), 'Unauthenticated payload must not be stored');
     }
 
     /**
@@ -308,5 +288,160 @@ class TelemetryIdentityPathTest extends TestCase
         $response = $this->postJson('/api/telemetry', $payload);
         $response->assertStatus(401);
         $response->assertJson(['error_code' => 'AUTH_REQUIRED_V040']);
+    }
+
+    /**
+     * TEST: Unauthenticated ingest on a fresh install (no legacy fallback
+     * org) is denied with 401 — nothing stored, no internals disclosed.
+     */
+    public function test_unauthenticated_ingest_on_fresh_install_returns_401(): void
+    {
+        // Simulate a fresh OSS install: no 'chaosmonkey' fallback org exists.
+        Organization::where('slug', 'chaosmonkey')->update(['slug' => 'test-org']);
+
+        $before = TelemetryEvent::count();
+
+        $payload = [
+            'source' => 'vscode',
+            'user_id' => 'dev-user-vscode',
+            'events' => [
+                [
+                    'event_type' => 'session',
+                    'count' => 1,
+                    'duration_ms' => 60000,
+                    'timestamp' => now()->toISOString(),
+                    'metadata' => [
+                        'source' => 'vscode',
+                        'segment_type' => 'session',
+                        'session_id' => 'session_unauth_001',
+                    ],
+                ],
+            ],
+        ];
+
+        $response = $this->postJson('/api/telemetry', $payload);
+
+        $response->assertStatus(401);
+        $response->assertJson(['error_code' => 'AUTH_REQUIRED']);
+        $this->assertSame($before, TelemetryEvent::count(), 'Denied request must not store events');
+
+        $body = $response->getContent();
+        $this->assertStringNotContainsString('exception', $body);
+        $this->assertStringNotContainsString('trace', $body);
+        $this->assertStringNotContainsString('ORGANIZATION_NOT_FOUND', $body);
+    }
+
+    /**
+     * TEST: A forged organization_id cannot smuggle anonymous writes into
+     * a real tenant's organization (the historical Option-A path).
+     */
+    public function test_unauthenticated_forged_organization_id_is_denied(): void
+    {
+        $org = Organization::create(['name' => 'Victim Org', 'slug' => 'victim-org-' . Str::random(6)]);
+
+        $before = TelemetryEvent::count();
+
+        $response = $this->postJson('/api/telemetry', [
+            'source' => 'vscode',
+            'organization_id' => $org->id,
+            'events' => [
+                [
+                    'event_type' => 'session',
+                    'count' => 1,
+                    'metadata' => ['session_id' => 'forged-org-001'],
+                ],
+            ],
+        ]);
+
+        $response->assertStatus(401);
+        $this->assertSame($before, TelemetryEvent::count(), 'Forged org write must be denied before attribution');
+    }
+
+    /**
+     * TEST: A forged user_id matching a real user's github_id cannot write
+     * into that user's organization (the historical Option-C path).
+     */
+    public function test_unauthenticated_forged_user_identity_is_denied(): void
+    {
+        $org = Organization::create(['name' => 'Identity Org', 'slug' => 'identity-org-' . Str::random(6)]);
+        User::create([
+            'name' => 'Real User',
+            'email' => 'real-' . Str::random(6) . '@test.com',
+            'github_id' => 'gh-real-123',
+            'organization_id' => $org->id,
+        ]);
+
+        $before = TelemetryEvent::count();
+
+        $response = $this->postJson('/api/telemetry', [
+            'source' => 'vscode',
+            'user_id' => 'gh-real-123',
+            'events' => [
+                [
+                    'event_type' => 'session',
+                    'count' => 1,
+                    'metadata' => ['session_id' => 'forged-user-001'],
+                ],
+            ],
+        ]);
+
+        $response->assertStatus(401);
+        $this->assertSame($before, TelemetryEvent::count(), 'Forged identity write must be denied before attribution');
+    }
+
+    /**
+     * TEST: A dashboard session can only write into its own organization —
+     * a caller-supplied organization_id for another tenant is denied.
+     */
+    public function test_session_authenticated_cross_org_write_is_denied(): void
+    {
+        $org = Organization::where('slug', 'chaosmonkey')->first();
+        $otherOrg = Organization::create(['name' => 'Other Org', 'slug' => 'other-' . Str::random(6)]);
+        $user = User::create([
+            'name' => 'Member',
+            'email' => 'member-' . Str::random(6) . '@test.com',
+            'organization_id' => $org->id,
+        ]);
+
+        $before = TelemetryEvent::count();
+
+        $response = $this->actingAs($user)->postJson('/api/telemetry', [
+            'source' => 'vscode',
+            'organization_id' => $otherOrg->id,
+            'events' => [
+                ['event_type' => 'session', 'count' => 1, 'metadata' => ['session_id' => 'xorg-001']],
+            ],
+        ]);
+
+        $response->assertStatus(403);
+        $response->assertJson(['error_code' => 'ORGANIZATION_MISMATCH']);
+        $this->assertSame($before, TelemetryEvent::count());
+    }
+
+    /**
+     * TEST: A dashboard session write without organization_id is attributed
+     * to the caller's own organization.
+     */
+    public function test_session_authenticated_write_scoped_to_own_org(): void
+    {
+        $org = Organization::where('slug', 'chaosmonkey')->first();
+        $user = User::create([
+            'name' => 'Member',
+            'email' => 'member-' . Str::random(6) . '@test.com',
+            'organization_id' => $org->id,
+        ]);
+
+        $response = $this->actingAs($user)->postJson('/api/telemetry', [
+            'source' => 'vscode',
+            'events' => [
+                ['event_type' => 'session', 'count' => 1, 'metadata' => ['session_id' => 'own-org-001']],
+            ],
+        ]);
+
+        $response->assertStatus(200);
+        $this->assertDatabaseHas('telemetry_events', [
+            'session_id' => 'own-org-001',
+            'organization_id' => $org->id,
+        ]);
     }
 }

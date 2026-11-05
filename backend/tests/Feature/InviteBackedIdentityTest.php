@@ -452,11 +452,13 @@ class InviteBackedIdentityTest extends TestCase
     }
 
     /**
-     * TEST: Legacy telemetry (pre-0.4.0) without token is preserved (anonymous)
+     * TEST: Legacy telemetry (pre-0.4.0) without a token is denied —
+     * anonymous ingestion is not accepted.
      */
-    public function test_legacy_telemetry_preserved_without_token(): void
+    public function test_legacy_telemetry_without_token_is_denied(): void
     {
         [$org] = $this->seedOrgAndInvite();
+        $before = TelemetryEvent::count();
 
         $payload = [
             'source' => 'vscode',
@@ -481,7 +483,8 @@ class InviteBackedIdentityTest extends TestCase
         ];
 
         $response = $this->postJson('/api/telemetry', $payload);
-        $response->assertStatus(200);
+        $response->assertStatus(401);
+        $this->assertSame($before, TelemetryEvent::count(), 'Anonymous legacy payload must not be stored');
     }
 
     /**

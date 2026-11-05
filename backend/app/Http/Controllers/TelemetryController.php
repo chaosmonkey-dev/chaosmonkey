@@ -449,6 +449,15 @@ class TelemetryController extends Controller
     }
     public function upload(Request $request)
     {
+        // FAIL CLOSED: same ingestion policy as store() — a bearer token or
+        // dashboard session is required; anonymous writes are not accepted.
+        $uploadToken = $request->bearerToken()
+            ? $this->resolveToken($request->bearerToken())
+            : null;
+        if (!$uploadToken && !Auth::check()) {
+            return response()->json(['error' => 'Telemetry ingestion requires a valid bearer token.'], 401);
+        }
+
         Log::info('Telemetry upload endpoint hit');
         // Check if a file was uploaded with 'telemetry' field name
         $file = $request->file('telemetry');
@@ -775,6 +784,47 @@ class TelemetryController extends Controller
             ], 401);
         }
 
+        // FAIL CLOSED: anonymous ingestion is not accepted. Without this,
+        // any caller could write events into any organization via a forged
+        // organization_id or user_id (see Options A/C below).
+        if (!$resolvedApiToken) {
+            if (!Auth::check()) {
+                Log::warning('[TELEMETRY] Rejecting unauthenticated telemetry', [
+                    'source' => $source,
+                    'has_organization_id' => !empty($organizationId),
+                ]);
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Telemetry ingestion requires a valid bearer token.',
+                    'error_code' => 'AUTH_REQUIRED'
+                ], 401);
+            }
+
+            // Session-authenticated writes are attributed strictly to the
+            // caller's own organization — a caller-supplied organization_id
+            // for another tenant is rejected, never honored.
+            $sessionOrganizationId = Auth::user()?->organization_id;
+            if (!$sessionOrganizationId) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Your account is not associated with an organization.',
+                    'error_code' => 'NO_ORGANIZATION'
+                ], 403);
+            }
+            if ($organizationId && (int) $organizationId !== (int) $sessionOrganizationId) {
+                Log::warning('[TELEMETRY] Cross-organization write denied', [
+                    'user_id' => Auth::id(),
+                    'requested_organization_id' => $organizationId,
+                ]);
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Cannot write telemetry to another organization.',
+                    'error_code' => 'ORGANIZATION_MISMATCH'
+                ], 403);
+            }
+            $organizationId = $sessionOrganizationId;
+        }
+
         // SERVER-AUTHORITATIVE IDENTITY OVERRIDE (applied exactly once)
         if ($resolvedApiToken) {
             // PHASE 3: Fail-closed installation rules
@@ -859,15 +909,18 @@ class TelemetryController extends Controller
                 // User not found or has no org → fallback to ChaosMonkey
                 $chaosMonkeyOrg = DB::table('organizations')->where('slug', 'chaosmonkey')->first();
                 if (!$chaosMonkeyOrg) {
-                    Log::error('[TELEMETRY] ChaosMonkey organization not found during fallback', [
+                    // Fresh installs have no legacy fallback org, so
+                    // unauthenticated telemetry cannot be attributed.
+                    // Deny it instead of failing with a 500.
+                    Log::warning('[TELEMETRY] Rejecting unauthenticated telemetry: no fallback organization', [
                         'user_id' => $userId,
                     ]);
-                    
+
                     return response()->json([
                         'status' => 'error',
-                        'message' => 'Default organization not found',
-                        'error_code' => 'ORGANIZATION_NOT_FOUND'
-                    ], 500);
+                        'message' => 'Telemetry ingestion requires a valid bearer token.',
+                        'error_code' => 'AUTH_REQUIRED'
+                    ], 401);
                 }
                 $targetOrganizationId = $chaosMonkeyOrg->id;
                 Log::warning('[TELEMETRY] User not found, fell back to ChaosMonkey', [
