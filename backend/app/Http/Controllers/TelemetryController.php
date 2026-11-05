@@ -2966,7 +2966,7 @@ class TelemetryController extends Controller
         // LOCAL demo only: the Local Lab attribution authority is
         // LocalDeveloperResolver, whose fixture identity map proves
         // non-invite-shaped user_ids belong to known local developers —
-        // Matt's verified alias identities (local-developer, 4, 18269556)
+        // The operator's verified alias identities (local-developer, 4, 41001234)
         // and the six simulated demo personas (90001-90006). Counting only
         // invite:* rows would misreport a fully developer-resolved local
         // population as unattributed. Persona rows qualify only when

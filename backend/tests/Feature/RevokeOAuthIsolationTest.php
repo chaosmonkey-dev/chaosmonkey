@@ -33,7 +33,7 @@ class RevokeOAuthIsolationTest extends TestCase
             'name' => 'Matt Support',
             'email' => 'matt@test.com',
             'password' => bcrypt('password'),
-            'github_id' => 18269556,
+            'github_id' => 41001234,
             'organization_id' => $this->org->id,
             'role' => 'admin',
         ]);
@@ -54,7 +54,7 @@ class RevokeOAuthIsolationTest extends TestCase
                 'user_id' => $this->userA->id,
                 'access_token' => 'token-A-' . Str::random(32),
                 'organization_id' => $this->org->id,
-                'user_data' => json_encode(['login' => 'octo-user', 'id' => 18269556]),
+                'user_data' => json_encode(['login' => 'octo-user', 'id' => 41001234]),
                 'created_at' => now(),
                 'updated_at' => now(),
             ],

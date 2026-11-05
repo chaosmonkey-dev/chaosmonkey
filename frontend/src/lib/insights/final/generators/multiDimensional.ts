@@ -58,8 +58,8 @@ function formatPct(ratio: number): string {
 function repoDisplayName(canonicalRepo: string): string {
   // Customer-facing rule: display the canonical owner/repo identity
   // everywhere (titles, evidence, charts, cards). Short last-segment labels
-  // caused the same repo to render as both "am-sim" and
-  // "angrymonkeyparty/am-sim" on different surfaces. If a raw URL slips
+  // caused the same repo to render as both "demo-sim" and
+  // "demo-org/demo-sim" on different surfaces. If a raw URL slips
   // through un-normalized, collapse it to owner/repo before display.
   // Internal source prefixes ('azure:org/repo') are stripped for display.
   const normalized = normalizeRepoUrl(canonicalRepo);

@@ -124,11 +124,11 @@ describe('Team Management cleanup — roster filtering', () => {
   })
 
   it('5) real current user remains visible', () => {
-    const realUser = { id: 4, name: 'Matt McClintock', email: 'matt@chaosmonkey.com', github_id: 'matt_mcclintock', status: 'active' }
+    const realUser = { id: 4, name: 'Riley Admin', email: 'riley@chaosmonkey.dev', github_id: 'riley_admin', status: 'active' }
     expect(isSimulatedUser(realUser, currentUserId)).toBe(false)
     const visible = visibleTeamMembers([realUser], currentUserId)
     expect(visible.length).toBe(1)
-    expect(visible[0].name).toBe('Matt McClintock')
+    expect(visible[0].name).toBe('Riley Admin')
   })
 
   it('6) manually created pending enrollments remain visible', () => {
@@ -149,7 +149,7 @@ describe('Team Management cleanup — roster filtering', () => {
   it('8) uncertain identity is not silently hidden', () => {
     // A user with a real-sounding name, real-looking email, and numeric github_id
     // must NOT be hidden (could be a real customer developer).
-    const uncertainUser = { id: 100, name: 'Jane Cooper', email: 'jane.cooper@somecompany.com', github_id: '18269556', status: 'active' }
+    const uncertainUser = { id: 100, name: 'Jane Cooper', email: 'jane.cooper@somecompany.com', github_id: '41001234', status: 'active' }
     expect(isSimulatedUser(uncertainUser, currentUserId)).toBe(false)
 
     // A user with null github_id and a real-looking email (not matching any sim pattern)
@@ -223,7 +223,7 @@ describe('Team Management cleanup — github_id classifier safety', () => {
   const currentUserId = 4
 
   it('15) numeric github_id (real GitHub OAuth) is NOT classified as sim', () => {
-    const realUser = { id: 200, name: 'Real Dev', email: 'real@company.com', github_id: '18269556', status: 'active' }
+    const realUser = { id: 200, name: 'Real Dev', email: 'real@company.com', github_id: '41001234', status: 'active' }
     expect(isSimulatedUser(realUser, currentUserId)).toBe(false)
   })
 
@@ -269,7 +269,7 @@ describe('Team Management cleanup — github_id classifier scoped to Local', () 
   })
 
   it('21) explicit provenance fields work in all environments', () => {
-    const explicitSim = { id: 600, name: 'Explicit Sim', email: 'sim@anycompany.com', github_id: '18269556', status: 'active', is_simulated: true }
+    const explicitSim = { id: 600, name: 'Explicit Sim', email: 'sim@anycompany.com', github_id: '41001234', status: 'active', is_simulated: true }
     expect(isSimulatedUser(explicitSim, currentUserId, false)).toBe(true)
     expect(isSimulatedUser(explicitSim, currentUserId, true)).toBe(true)
   })
@@ -310,12 +310,12 @@ describe('Team Management cleanup — enrollment UX availability', () => {
 // --- Admin/owner exception: never hide legitimate operators ---
 
 describe('Team Management cleanup — admin/owner exception', () => {
-  const currentUserId = 9 // Jack McClintock
+  const currentUserId = 9 // Casey Member
 
   it('26) admin user with non-numeric github_id is NOT hidden', () => {
-    // Matt McClintock (id=4, admin, github_id='matt_mcclintock') must be visible.
+    // Riley Admin (id=4, admin, github_id='riley_admin') must be visible.
     // The github_id classifier would hide him, but the admin exception protects him.
-    const admin = { id: 4, name: 'Matt McClintock', email: 'matt@chaosmonkey.com', github_id: 'matt_mcclintock', status: 'active', role: 'admin' }
+    const admin = { id: 4, name: 'Riley Admin', email: 'riley@chaosmonkey.dev', github_id: 'riley_admin', status: 'active', role: 'admin' }
     expect(isSimulatedUser(admin, currentUserId, true)).toBe(false)
   })
 
@@ -343,24 +343,24 @@ describe('Team Management cleanup — Local fixture census regression', () => {
   // The actual Local fixture population (from /api/org/users census):
   // 220 total rows: 216 sim fixtures + 4 legitimate identities
   // Legitimate identities:
-  //   - Matt McClintock (id=4, admin, matt@chaosmonkey.com, github_id='matt_mcclintock')
-  //   - Jack McClintock (id=9, member, mattrmclaren@gmail.com, github_id=null)
+  //   - Riley Admin (id=4, admin, riley@chaosmonkey.dev, github_id='riley_admin')
+  //   - Casey Member (id=9, member, casey@chaosmonkey.dev, github_id=null)
   //   - Average Developer (id=17, developer, avg-dev@demo.com, github_id=null) — test identity
   //   - Struggling Developer (id=18, developer, struggling-dev@demo.com, github_id=null) — test identity
-  //   - 2 pending invites: mcclintockmatthieu@gmail.com, matt@chaosmonkey.com
+  //   - 2 pending invites: pending-one@chaosmonkey.dev, riley@chaosmonkey.dev
   // Sim fixtures: 120 northstar.com, 74 example.com, 8 demo-org.com, 6 demo.org, 5 chaosmonkey.local
 
   const localFixtures = [
     // Legitimate operators
-    { id: 4, name: 'Matt McClintock', email: 'matt@chaosmonkey.com', github_id: 'matt_mcclintock', status: 'active', role: 'admin' },
-    { id: 9, name: 'Jack McClintock', email: 'mattrmclaren@gmail.com', github_id: null, status: 'active', role: 'member' },
+    { id: 4, name: 'Riley Admin', email: 'riley@chaosmonkey.dev', github_id: 'riley_admin', status: 'active', role: 'admin' },
+    { id: 9, name: 'Casey Member', email: 'casey@chaosmonkey.dev', github_id: null, status: 'active', role: 'member' },
     // Test identities (visible only to themselves)
     { id: 16, name: 'High Performer', email: 'high-performer@demo.com', github_id: null, status: 'active', role: 'developer' },
     { id: 17, name: 'Average Developer', email: 'avg-dev@demo.com', github_id: null, status: 'active', role: 'developer' },
     { id: 18, name: 'Struggling Developer', email: 'struggling-dev@demo.com', github_id: null, status: 'active', role: 'developer' },
     // Pending invites (always visible)
-    { id: null, name: 'mcclintockmatthieu@gmail.com', email: 'mcclintockmatthieu@gmail.com', github_id: null, status: 'pending', role: 'member' },
-    { id: null, name: 'matt@chaosmonkey.com', email: 'matt@chaosmonkey.com', github_id: null, status: 'pending', role: 'member' },
+    { id: null, name: 'pending-one@chaosmonkey.dev', email: 'pending-one@chaosmonkey.dev', github_id: null, status: 'pending', role: 'member' },
+    { id: null, name: 'riley@chaosmonkey.dev', email: 'riley@chaosmonkey.dev', github_id: null, status: 'pending', role: 'member' },
     // Sim fixtures (sample of the 216)
     { id: 422, name: 'Alex Thompson', email: 'cursor-0_1778532763@northstar.com', github_id: 'cursor_user_0_1778532763_6a02419bd0776', status: 'active', role: 'member' },
     { id: 400, name: 'Alice Chen', email: 'reviewer-alice_chen@demo-org.com', github_id: 'reviewer_alice_chen', status: 'active', role: 'member' },

@@ -309,7 +309,7 @@ class CanonicalCohortFilterTest extends TestCase
         config()->set('local_developer.local_demo_persona_invites', [
             'jordan.vega@chaosmonkey.local' => '90001',
         ]);
-        config()->set('local_developer.static_identities', ['local-developer', '4', '18269556']);
+        config()->set('local_developer.static_identities', ['local-developer', '4', '41001234']);
         config()->set('local_developer.sample_persona_ids', ['90001', '90002', '90003', '90004', '90005', '90006']);
 
         $cohort = $this->createCohort('Platform');
@@ -333,7 +333,7 @@ class CanonicalCohortFilterTest extends TestCase
 
     public function test_local_operator_invite_scopes_verified_local_developer_aliases(): void
     {
-        config()->set('local_developer.static_identities', ['local-developer', '4', '18269556']);
+        config()->set('local_developer.static_identities', ['local-developer', '4', '41001234']);
         config()->set('local_developer.matt_email', 'operator@example.org');
         config()->set('local_developer.sample_persona_ids', ['90001', '90002', '90003', '90004', '90005', '90006']);
 
@@ -342,7 +342,7 @@ class CanonicalCohortFilterTest extends TestCase
         $this->addMember($cohort, $mattInvite);
 
         $this->createSessionEvent('4', 'vscode', $this->organizationId);
-        $this->createSessionEvent('18269556', 'windsurf', $this->organizationId);
+        $this->createSessionEvent('41001234', 'windsurf', $this->organizationId);
         $this->createSessionEvent("invite:{$mattInvite->id}", 'devin', $this->organizationId);
         $this->createSessionEvent('90001', 'cursor', $this->organizationId, ['simulated' => true]);
 

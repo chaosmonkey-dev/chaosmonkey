@@ -598,7 +598,7 @@ class ReleaseProvenanceSafetyTest extends TestCase
             'access_token' => 'gho_test_' . uniqid(),
             'user_data' => json_encode([
                 'login' => $login,
-                'id' => 18269556,
+                'id' => 41001234,
                 'token_purpose' => $purpose,
             ]),
             'created_at' => now(),

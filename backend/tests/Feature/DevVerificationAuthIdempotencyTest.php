@@ -51,7 +51,7 @@ class DevVerificationAuthIdempotencyTest extends TestCase
         DB::table('users')->insert([
             'id' => $userId,
             'name' => 'Matt Test',
-            'email' => 'matt@chaosmonkey.com',
+            'email' => 'dev@example.com',
             'password' => bcrypt('password'),
             'organization_id' => $orgId,
             'created_at' => $now,

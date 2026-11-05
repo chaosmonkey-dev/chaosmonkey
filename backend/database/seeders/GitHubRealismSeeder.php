@@ -42,7 +42,7 @@ class GitHubRealismSeeder extends Seeder
     {
         $mediumPRs = [
             [
-                'repo_name' => 'AngryMonkeyParty/AM-Sim',
+                'repo_name' => 'demo-org/demo-sim',
                 'pr_number' => 101,
                 'developer_id' => 'alex.chen',
                 'user_login' => 'alexchen',
@@ -84,7 +84,7 @@ class GitHubRealismSeeder extends Seeder
                 'pr_reopened_count' => 0,
             ],
             [
-                'repo_name' => 'AngryMonkeyParty/AM-Sim',
+                'repo_name' => 'demo-org/demo-sim',
                 'pr_number' => 103,
                 'developer_id' => 'marcus.kim',
                 'user_login' => 'marcuskim',
@@ -147,7 +147,7 @@ class GitHubRealismSeeder extends Seeder
                 'pr_reopened_count' => 0,
             ],
             [
-                'repo_name' => 'AngryMonkeyParty/AM-Sim',
+                'repo_name' => 'demo-org/demo-sim',
                 'pr_number' => 106,
                 'developer_id' => 'priya.patel',
                 'user_login' => 'priyapatel',
@@ -210,7 +210,7 @@ class GitHubRealismSeeder extends Seeder
                 'pr_reopened_count' => 0,
             ],
             [
-                'repo_name' => 'AngryMonkeyParty/AM-Sim',
+                'repo_name' => 'demo-org/demo-sim',
                 'pr_number' => 109,
                 'developer_id' => 'sarah.rodriguez',
                 'user_login' => 'sarahrodriguez',
@@ -372,7 +372,7 @@ class GitHubRealismSeeder extends Seeder
         // Add a failed deployment cluster
         $failedDeployments = [
             [
-                'repo_name' => 'AngryMonkeyParty/AM-Sim',
+                'repo_name' => 'demo-org/demo-sim',
                 'environment' => 'staging',
                 'deployment_status' => 'failure',
                 'deployed_at' => Carbon::now()->subDays(2)->subHours(1),
@@ -386,7 +386,7 @@ class GitHubRealismSeeder extends Seeder
                 'updated_at' => Carbon::now()->subDays(2)->subHours(1),
             ],
             [
-                'repo_name' => 'AngryMonkeyParty/AM-Sim',
+                'repo_name' => 'demo-org/demo-sim',
                 'environment' => 'staging',
                 'deployment_status' => 'failure',
                 'deployed_at' => Carbon::now()->subDays(2)->subHours(3),

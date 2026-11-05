@@ -7357,7 +7357,7 @@ return response()->json([
         // - 494-533 range = EXCLUDED (no explicit simulated marker)
         // - invite:* = EXCLUDED from demo roster (test/acceptance identities)
         // - anonymous, test_user, demo-user = EXCLUDED
-        // - 18269556 (raw GitHub ID) = EXCLUDED (real, not seeded)
+        // - 41001234 (raw GitHub ID) = EXCLUDED (real, not seeded)
         // - dev-user-vscode = EXCLUDED (no simulated marker, uncertain origin)
         //
         // Each developer entry includes a `workflows` array listing the

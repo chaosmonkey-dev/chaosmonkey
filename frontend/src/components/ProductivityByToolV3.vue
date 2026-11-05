@@ -941,7 +941,7 @@ const isDeveloperFiltered = computed(() => {
 
 // CR-X: The backend's LocalDeveloperResolver is the sole authority for
 // logical developer identity expansion (e.g. local-developer →
-// [local-developer, 4, 18269556, invite:42]). The /api/developers endpoint
+// [local-developer, 4, 41001234, invite:42]). The /api/developers endpoint
 // exposes the resolved raw identity set via `raw_identities` on each
 // developer entry. This computed consumes that authoritative set so the
 // filtered-cost layer matches the same logical developer scope as the

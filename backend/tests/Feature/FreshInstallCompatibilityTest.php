@@ -72,12 +72,12 @@ class FreshInstallCompatibilityTest extends TestCase
     }
 
     /**
-     * Fresh DB does NOT seed Matt McClintock user (Phase 0.6 guard).
+     * Fresh DB does NOT seed legacy backfill user (Phase 0.6 guard).
      */
-    public function test_fresh_db_has_no_matt_user(): void
+    public function test_fresh_db_has_no_legacy_user(): void
     {
-        $count = \DB::table('users')->where('github_id', 'matt_mcclintock')->count();
-        $this->assertEquals(0, $count, 'Fresh DB must not seed Matt McClintock user');
+        $count = \DB::table('users')->where('github_id', 'legacy_admin')->count();
+        $this->assertEquals(0, $count, 'Fresh DB must not seed legacy backfill user');
     }
 
     /**

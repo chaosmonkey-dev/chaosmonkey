@@ -439,7 +439,7 @@ describe('CR-X Day 1B S1 P0-A: Source-level backend-authority coverage assertion
 // ── CR-X Day 1B S1 P0-A: Real-shaped alias regression fixtures ───────────────
 // These fixtures reproduce the alias/resolved-developer population mismatch
 // that caused the real Local browser bug:
-//   - Backend resolves 'local-developer' to [local-developer, 4, 18269556, invite:42]
+//   - Backend resolves 'local-developer' to [local-developer, 4, 41001234, invite:42]
 //   - Frontend exact-id matching only matched 'local-developer' literal rows
 //   - This produced denominator 651 instead of the correct 1447
 // The fix: both numerator and denominator come from backend canonical metadata.

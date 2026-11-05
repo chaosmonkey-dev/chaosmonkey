@@ -23,12 +23,14 @@ class UserController extends Controller
             $notificationSettings = json_decode($user->notification_settings ?? '{}', true);
             $preferences = json_decode($user->preferences ?? '{}', true);
 
+            $nameParts = preg_split('/\s+/', trim($user->name ?? ''), 2);
+
             return response()->json([
                 'success' => true,
                 'data' => [
                     'profile' => [
-                        'firstName' => 'Matt', // Hardcoded for MVP
-                        'lastName' => 'McClintock',
+                        'firstName' => $nameParts[0] ?? '',
+                        'lastName' => $nameParts[1] ?? '',
                         'email' => $user->email,
                         'bio' => $user->bio ?? null,
                         'github_username' => $user->github_id,

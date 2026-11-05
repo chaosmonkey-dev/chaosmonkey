@@ -64,7 +64,7 @@ class GitHubReliabilityHardeningTest extends TestCase
     {
         DB::table('users')->insert([
             'name' => 'Matt', 'email' => 'matt@example.com', 'password' => 'x',
-            'organization_id' => null, 'github_id' => '18269556', 'role' => 'admin',
+            'organization_id' => null, 'github_id' => '41001234', 'role' => 'admin',
             'created_at' => now(), 'updated_at' => now(),
         ]);
         $uid = DB::getPdo()->lastInsertId();

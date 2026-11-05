@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\Log;
  * touches the database schema.
  *
  * Resolution rules (see config/local_developer.php):
- *  1. Static verified identities (local-developer, 4, 18269556)
+ *  1. Static verified identities (local-developer, 4, 41001234)
  *  2. Dynamic: any invite:<id> whose Invite email matches Matt's verified email
  *  3. EXCLUDES any user_id that has simulated=true telemetry
  *  4. EXCLUDES the six sample persona IDs (90001-90006)
@@ -63,7 +63,7 @@ class LocalDeveloperResolver
     {
         $this->logicalId = config('local_developer.logical_id', 'local-developer');
         $this->staticIdentities = config('local_developer.static_identities', []);
-        $this->mattEmail = config('local_developer.matt_email', 'matt@chaosmonkey.com');
+        $this->mattEmail = config('local_developer.matt_email', '');
         $this->samplePersonaIds = config('local_developer.sample_persona_ids', []);
 
         // Gate: alias expansion is Local-only.

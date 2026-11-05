@@ -13,8 +13,8 @@
  *   devId === selectedDeveloper.value
  * equality, which only matched literal 'local-developer' rows. The backend
  * LocalDeveloperResolver expands 'local-developer' to multiple raw identities
- * (local-developer, 4, 18269556, invite:42, ...). Sessions with user_id='4'
- * or '18269556' were silently excluded, producing an empty scoped population
+ * (local-developer, 4, 41001234, invite:42, ...). Sessions with user_id='4'
+ * or '41001234' were silently excluded, producing an empty scoped population
  * and zero cost data despite the BACKEND AUTHORITY allocation banner.
  *
  * The fix: the /api/developers endpoint now exposes `raw_identities` on each
@@ -45,7 +45,7 @@ function getFilteredAllocatedCostForCard(
 describe('CR-X PBT developer-only filtered cost — logical identity', () => {
   // Backend-authoritative raw identity set for 'local-developer'
   // (from LocalDeveloperResolver: static identities + dynamic invites)
-  const localDeveloperRawIdentities = ['local-developer', '4', '18269556']
+  const localDeveloperRawIdentities = ['local-developer', '4', '41001234']
 
   // Simulate the full org authoritative session population.
   // Matt's sessions are spread across multiple raw user_ids — the exact
@@ -54,7 +54,7 @@ describe('CR-X PBT developer-only filtered cost — logical identity', () => {
     // Matt's sessions under different raw identities
     ...Array.from({ length: 30 }, () => ({ developer_id: 'local-developer', user_id: 'local-developer', tool: 'devin' })),
     ...Array.from({ length: 50 }, () => ({ developer_id: '4', user_id: '4', tool: 'vscode' })),
-    ...Array.from({ length: 40 }, () => ({ developer_id: '18269556', user_id: '18269556', tool: 'cursor' })),
+    ...Array.from({ length: 40 }, () => ({ developer_id: '41001234', user_id: '41001234', tool: 'cursor' })),
     // Other developers' sessions (must NOT be included in scoped population)
     ...Array.from({ length: 100 }, () => ({ developer_id: '90001', user_id: '90001', tool: 'devin' })),
     ...Array.from({ length: 80 }, () => ({ developer_id: '90002', user_id: '90002', tool: 'vscode' })),
@@ -68,7 +68,7 @@ describe('CR-X PBT developer-only filtered cost — logical identity', () => {
 
   it('OLD raw-equality filter produces empty/missing cost data (reproduces defect)', () => {
     // This is the BROKEN behavior: raw equality only matches 'local-developer'
-    // literal rows, missing '4' and '18269556' sessions.
+    // literal rows, missing '4' and '41001234' sessions.
     const brokenScopedRows = orgSessions.filter(s => {
       const devId = s.developer_id || s.user_id
       return devId === 'local-developer'
@@ -179,7 +179,7 @@ describe('CR-X PBT developer-only filtered cost — logical identity', () => {
       return rawIds.includes(devId) && repo === selectedRepo
     })
 
-    // Should include Matt's sessions in the angrymonkey repo across all
+    // Should include the operator's sessions in the demo repo across all
     // raw identities (first 30 devin + first 30 of the 50 vscode = 60 max)
     expect(scopedRows.length).toBeGreaterThan(0)
     expect(scopedRows.length).toBeLessThanOrEqual(120)

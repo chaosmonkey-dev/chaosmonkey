@@ -224,7 +224,7 @@ class SeedMultiDevelopers extends Command
         
         return [
             'user_id' => "simulation_{$devId}",
-            'repo' => 'https://github.com/AngryMonkeyParty/AM-Sim.git',
+            'repo' => 'https://github.com/demo-org/demo-sim.git',
             'created_at' => $startTime,
             'updated_at' => $startTime,
             'ide_name' => $ide,
@@ -237,7 +237,7 @@ class SeedMultiDevelopers extends Command
             'files_edited' => $this->getFilesEdited($devInfo['archetype'], $duration),
             'commits_per_session' => $this->getCommitsPerSession($devInfo['archetype']),
             'time_to_first_commit' => $this->getTimeToFirstCommit($devInfo['archetype']),
-            'project_name' => 'AM-Sim',
+            'project_name' => 'demo-sim',
             'branch' => 'main'
         ];
     }

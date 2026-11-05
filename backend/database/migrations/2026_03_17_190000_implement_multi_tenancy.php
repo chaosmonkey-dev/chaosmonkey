@@ -58,12 +58,12 @@ return new class extends Migration
             // the ChaosMonkey org. The account needs a row for FK/org
             // assignment only, so it gets a random unusable password —
             // never a guessable placeholder.
-            $mattUser = DB::table('users')->where('github_id', 'matt_mcclintock')->first();
-            if (!$mattUser) {
+            $legacyUser = DB::table('users')->where('github_id', 'legacy_admin')->first();
+            if (!$legacyUser) {
                 DB::table('users')->insert([
-                    'name' => 'Matt McClintock',
-                    'email' => 'matt@chaosmonkey.com',
-                    'github_id' => 'matt_mcclintock',
+                    'name' => 'Legacy Install',
+                    'email' => 'legacy@localhost',
+                    'github_id' => 'legacy_admin',
                     'organization_id' => $chaosMonkeyOrgId,
                     'password' => bcrypt(Str::random(40)),
                     'created_at' => now(),
@@ -128,9 +128,9 @@ return new class extends Migration
                     ->update(['organization_id' => null]);
             }
 
-            // Delete Matt McClintock user
+            // Delete legacy backfill user
             DB::table('users')
-                ->where('github_id', 'matt_mcclintock')
+                ->where('github_id', 'legacy_admin')
                 ->delete();
 
             // Delete ChaosMonkey organization

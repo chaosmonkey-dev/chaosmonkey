@@ -37,7 +37,7 @@ class BulkInviteEmail extends Mailable
 
         return $this
             ->to($this->recipientEmail)
-            ->from('noreply@chaosmonkey.com', 'ChaosMonkey Team')
+            ->from('noreply@chaosmonkey.dev', 'ChaosMonkey Team')
             ->subject("You've been invited to join {$organizationName} on ChaosMonkey")
             ->html(nl2br($body, false));
     }

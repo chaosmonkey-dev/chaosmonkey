@@ -372,14 +372,14 @@ class CanonicalDeveloperFilterTest extends TestCase
 
     public function test_local_developer_selector_narrows_population_not_fail_open(): void
     {
-        config()->set('local_developer.static_identities', ['local-developer', '4', '18269556']);
+        config()->set('local_developer.static_identities', ['local-developer', '4', '41001234']);
         config()->set('local_developer.sample_persona_ids', ['90001', '90002', '90003', '90004', '90005', '90006']);
 
         // Create events with user_ids that match the static identity set
-        // (local-developer, 4, 18269556) and some that don't
+        // (local-developer, 4, 41001234) and some that don't
         $this->createSessionEvent('local-developer', 'cursor', 'cursor', $this->organizationId);
         $this->createSessionEvent('4', 'devin', 'devin', $this->organizationId);
-        $this->createSessionEvent('18269556', 'vscode', 'vscode', $this->organizationId);
+        $this->createSessionEvent('41001234', 'vscode', 'vscode', $this->organizationId);
         // These should NOT match local-developer resolution
         $this->createSessionEvent('invite:99', 'cursor', 'cursor', $this->organizationId);
         $this->createSessionEvent('other-user', 'devin', 'devin', $this->organizationId);
@@ -719,9 +719,9 @@ class CanonicalDeveloperFilterTest extends TestCase
 
     public function test_developer_grouping_collapses_aliases_and_reconciles_coverage(): void
     {
-        config()->set('local_developer.static_identities', ['local-developer', '4', '18269556']);
+        config()->set('local_developer.static_identities', ['local-developer', '4', '41001234']);
         $this->createSessionEvent('local-developer', 'devin', 'devin', $this->organizationId);
-        $this->createSessionEvent('18269556', 'windsurf', 'windsurf', $this->organizationId);
+        $this->createSessionEvent('41001234', 'windsurf', 'windsurf', $this->organizationId);
         $this->createSessionEvent('opaque-user', 'devin', 'devin', $this->organizationId);
 
         $response = $this->callCanonicalGroupedByDeveloper('devin,windsurf');

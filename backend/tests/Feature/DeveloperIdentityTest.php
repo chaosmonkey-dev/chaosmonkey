@@ -229,7 +229,7 @@ class DeveloperIdentityTest extends TestCase
 
         // Raw numeric GitHub ID (should be excluded)
         DB::table('pull_requests')->insert([
-            'developer_id' => '18269556',
+            'developer_id' => '41001234',
             'created_at' => now(),
             'updated_at' => now(),
         ]);
@@ -268,13 +268,13 @@ class DeveloperIdentityTest extends TestCase
         $this->assertNotContains('cm-dev-17830249', $developerIds);
         $this->assertNotContains('cm-dev-17833694', $developerIds);
         $this->assertNotContains('dev-user-vscode', $developerIds);
-        $this->assertNotContains('18269556', $developerIds);
+        $this->assertNotContains('41001234', $developerIds);
 
         $excluded = $response->json('excluded_legacy_ids');
         $this->assertContains('anonymous', $excluded);
         $this->assertContains('cm-dev-17830249', $excluded);
         $this->assertContains('dev-user-vscode', $excluded);
-        // Note: 18269556 (raw numeric GitHub ID from pull_requests) is NOT in
+        // Note: 41001234 (raw numeric GitHub ID from pull_requests) is NOT in
         // excluded_legacy_ids because getDevelopers() fail-closed skips
         // pull_requests entirely (no organization_id column on that table).
     }

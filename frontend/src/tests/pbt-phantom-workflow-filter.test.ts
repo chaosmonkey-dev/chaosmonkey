@@ -243,10 +243,10 @@ describe('PBT phantom workflow filter — filter context scenarios', () => {
     expect(shouldRenderWorkflowChip(selectedWorkflow, WORKFLOWS_3)).toBe(false)
   })
 
-  it('14) Jordan Vega + angrymonkeyparty/am-sim: no phantom chip on metric switch', () => {
+  it('14) Jordan Vega + demo-org/demo-sim: no phantom chip on metric switch', () => {
     let selectedWorkflow = 'compare'
     const developer = 'jordan-vega'
-    const repo = 'angrymonkeyparty/am-sim'
+    const repo = 'demo-org/demo-sim'
 
     // Switch metric from AI Activity to Commits
     // selectedWorkflow should stay 'compare'

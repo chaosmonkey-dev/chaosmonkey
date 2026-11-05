@@ -34,9 +34,9 @@ function classifyMembers(members: any[]) {
 function dashboardMember(overrides: Partial<any> = {}) {
   return {
     id: 1,
-    name: 'Matt McClintock',
-    email: 'matt@chaosmonkey.com',
-    github_id: 18269556,
+    name: 'Riley Admin',
+    email: 'riley@chaosmonkey.dev',
+    github_id: 98765432,
     role: 'admin',
     status: 'active',
     ...overrides,

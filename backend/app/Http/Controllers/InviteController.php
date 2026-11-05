@@ -242,7 +242,7 @@ class InviteController extends Controller
                     function ($message) use ($invite, $organization) {
                         $message->to($invite->email)
                             ->subject("You've been invited to join {$organization->name} on ChaosMonkey")
-                            ->from('noreply@chaosmonkey.com', 'ChaosMonkey Team');
+                            ->from('noreply@chaosmonkey.dev', 'ChaosMonkey Team');
                     }
                 );
                 
@@ -711,7 +711,7 @@ class InviteController extends Controller
                 function ($message) use ($email, $organization) {
                     $message->to($email)
                         ->subject("You've been invited to join {$organization->name} on ChaosMonkey (Resent)")
-                        ->from('noreply@chaosmonkey.com', 'ChaosMonkey Team');
+                        ->from('noreply@chaosmonkey.dev', 'ChaosMonkey Team');
                 }
             );
             

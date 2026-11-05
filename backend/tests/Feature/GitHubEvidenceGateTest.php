@@ -134,7 +134,7 @@ class GitHubEvidenceGateTest extends TestCase
         $this->admin = User::create([
             'name' => 'Matt',
             'email' => 'matt@test.com',
-            'github_id' => '18269556',
+            'github_id' => '41001234',
             'organization_id' => $this->org->id,
             'role' => 'admin',
         ]);
@@ -150,7 +150,7 @@ class GitHubEvidenceGateTest extends TestCase
         $token = 'gho_test_' . Str::random(16);
         $userData = [
             'login' => $login,
-            'id' => 18269556,
+            'id' => 41001234,
             'public_repos' => 3,
         ];
         if ($purpose !== null) {
