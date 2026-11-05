@@ -24,6 +24,10 @@ updates:
     groups:
       backend-minor-patch:
         update-types: [minor, patch]
+    ignore:
+      # pint 1.32+ requires PHP ^8.3; project targets 8.2. Revisit if the
+      # PHP requirement is raised.
+      - dependency-name: laravel/pint
   - package-ecosystem: github-actions
     directory: /
     schedule:
