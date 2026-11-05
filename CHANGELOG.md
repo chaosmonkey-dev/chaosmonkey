@@ -5,7 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.2] — Community Preview
+
+Security hardening release. **All users should run `0.1.2`; `0.1.0` and
+`0.1.1` are superseded.**
+
+### Security
+
+- **Unauthenticated telemetry requests are denied before input
+  validation.** In `0.1.1`, request validation ran before the
+  authentication check, so a caller could distinguish valid inputs — such
+  as probing `organization_id` existence via the `exists:organizations`
+  rule — from the 401-vs-validation-error differential, and malformed
+  anonymous payloads received a redirect rather than an authorization
+  error. Bearer-token resolution and the anonymous-ingest guard now run
+  first: every unauthenticated write attempt uniformly returns `401`
+  before any validation executes.
+
 ## [0.1.1] — Community Preview
+
+> **Superseded by `0.1.2`** for the validation-ordering hardening above.
+> `0.1.1` closes the unauthenticated-ingestion vulnerability itself; the
+> tag and image remain available and unmodified for historical reference.
 
 Security fix release. **All users should run `0.1.1`; `0.1.0` is superseded.**
 
@@ -70,5 +91,6 @@ teams; this release makes the full stack self-hostable under Apache-2.0.
 - No automatic telemetry retention — operators own deletion policy.
 - Cost figures are configured estimates, not billing data.
 
+[0.1.2]: https://github.com/chaosmonkey-dev/chaosmonkey/releases/tag/v0.1.2
 [0.1.1]: https://github.com/chaosmonkey-dev/chaosmonkey/releases/tag/v0.1.1
 [0.1.0]: https://github.com/chaosmonkey-dev/chaosmonkey/releases/tag/v0.1.0

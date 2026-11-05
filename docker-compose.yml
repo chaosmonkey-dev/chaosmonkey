@@ -1,7 +1,7 @@
 services:
   chaosmonkey:
     # Uses the published image by default; uncomment `build: .` to build from source.
-    image: ghcr.io/chaosmonkey-dev/chaosmonkey:0.1.1
+    image: ghcr.io/chaosmonkey-dev/chaosmonkey:0.1.2
     # build: .
     ports:
       - "127.0.0.1:8080:80"

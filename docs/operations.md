@@ -61,10 +61,10 @@ newer image re-runs only the missing migrations.
 Pull the new pinned image, replace the container, keep the volume:
 
 ```bash
-docker pull ghcr.io/chaosmonkey-dev/chaosmonkey:0.1.1   # pin the new version
+docker pull ghcr.io/chaosmonkey-dev/chaosmonkey:0.1.2   # pin the new version
 docker stop chaosmonkey && docker rm chaosmonkey
 docker run -d --name chaosmonkey -p 127.0.0.1:8080:80 -v chaosmonkey-data:/data \
-  ghcr.io/chaosmonkey-dev/chaosmonkey:0.1.1
+  ghcr.io/chaosmonkey-dev/chaosmonkey:0.1.2
 ```
 
 **Always back up before upgrading.**

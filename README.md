@@ -11,7 +11,7 @@ GitHub integration. It was built and operated as a hosted product with real
 engineering teams and is now open source so anyone can self-host, inspect,
 and extend it.
 
-> **We're open.** `v0.1.1` — Community Preview — is available now under
+> **We're open.** `v0.1.2` — Community Preview — is available now under
 > Apache-2.0.
 
 ## Quick start (Docker)
@@ -23,7 +23,7 @@ Laravel, and a persistent SQLite database:
 docker run -d --name chaosmonkey \
   -p 127.0.0.1:8080:80 \
   -v chaosmonkey-data:/data \
-  ghcr.io/chaosmonkey-dev/chaosmonkey:0.1.1
+  ghcr.io/chaosmonkey-dev/chaosmonkey:0.1.2
 ```
 
 Then open <http://localhost:8080> and create your first administrator account:
