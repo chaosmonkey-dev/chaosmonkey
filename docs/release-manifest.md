@@ -1,4 +1,4 @@
-# Release manifest — v0.1.0 (Community Preview)
+# Release manifest — v0.1.1 (Community Preview)
 
 The server distributes its own client artifacts, so the files below are the
 authoritative bytes for this release. All checksums are SHA-256 of the files
@@ -9,8 +9,8 @@ in `backend/resources/extensions/`, which are the same bytes served by the
 
 | Item | Value |
 |---|---|
-| Release tag | `v0.1.0` (Community Preview) |
-| Container image | `ghcr.io/chaosmonkey-dev/chaosmonkey:0.1.0` |
+| Release tag | `v0.1.1` (Community Preview) |
+| Container image | `ghcr.io/chaosmonkey-dev/chaosmonkey:0.1.1` |
 | Also tagged | `ghcr.io/chaosmonkey-dev/chaosmonkey:0.1` |
 | Platforms | `linux/amd64`, `linux/arm64` |
 | Database | SQLite at `/data` (persistent volume required) |

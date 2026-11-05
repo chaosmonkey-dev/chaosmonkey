@@ -10,11 +10,11 @@
 Pull the published image (multi-arch, amd64 + arm64):
 
 ```bash
-docker pull ghcr.io/chaosmonkey-dev/chaosmonkey:0.1.0
+docker pull ghcr.io/chaosmonkey-dev/chaosmonkey:0.1.1
 docker run -d --name chaosmonkey \
   -p 127.0.0.1:8080:80 \
   -v chaosmonkey-data:/data \
-  ghcr.io/chaosmonkey-dev/chaosmonkey:0.1.0
+  ghcr.io/chaosmonkey-dev/chaosmonkey:0.1.1
 ```
 
 Or build from source:
@@ -29,8 +29,13 @@ docker run -d --name chaosmonkey \
   chaosmonkey
 ```
 
-Pin an explicit version tag (`0.1.0`) rather than `latest` — releases are
+Pin an explicit version tag (`0.1.1`) rather than `latest` — releases are
 immutable and upgrades are deliberate.
+
+> **`v0.1.0` is superseded.** It accepted unauthenticated telemetry writes
+> under some inputs; `v0.1.1` requires server-authoritative authentication
+> for every telemetry write endpoint. New installs must use `0.1.1`; any
+> running `0.1.0` instance should be upgraded.
 
 > **Network exposure**: the quickstart binds to loopback only
 > (`127.0.0.1:8080`), so the install is reachable only from the local machine.

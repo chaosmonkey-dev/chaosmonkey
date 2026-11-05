@@ -5,7 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.1] — Community Preview
+
+Security fix release. **All users should run `0.1.1`; `0.1.0` is superseded.**
+
+### Security
+
+- **Unauthenticated telemetry ingestion is now rejected on every install.**
+  `v0.1.0` accepted anonymous `POST /api/telemetry` and
+  `POST /api/telemetry/upload` requests when a caller supplied a valid
+  `organization_id`, a `user_id` matching an existing account, or when a
+  migrated database contained the legacy `chaosmonkey` organization —
+  allowing unauthorized parties to write telemetry into an instance and, in
+  the forged-organization case, into a specific tenant. All telemetry write
+  endpoints now require a valid bearer token or authenticated dashboard
+  session (`401` when absent/invalid), caller-supplied organization and
+  developer identifiers no longer determine tenant attribution, and
+  session-authenticated writes are scoped to the caller's own organization
+  (`403` on cross-tenant attempts). No database records are altered; valid
+  authenticated ingestion is unchanged.
+
 ## [0.1.0] — Community Preview
+
+> **Superseded by `0.1.1`** due to the telemetry-ingestion authorization
+> issue described above. The tag and published image remain available and
+> unmodified for historical reference; do not use for new installs.
 
 First public open-source release. ChaosMonkey was independently developed
 over ~16 months and operated as a hosted product with real engineering
@@ -46,4 +70,5 @@ teams; this release makes the full stack self-hostable under Apache-2.0.
 - No automatic telemetry retention — operators own deletion policy.
 - Cost figures are configured estimates, not billing data.
 
+[0.1.1]: https://github.com/chaosmonkey-dev/chaosmonkey/releases/tag/v0.1.1
 [0.1.0]: https://github.com/chaosmonkey-dev/chaosmonkey/releases/tag/v0.1.0
