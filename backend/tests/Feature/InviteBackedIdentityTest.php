@@ -448,7 +448,7 @@ class InviteBackedIdentityTest extends TestCase
 
         $response = $this->postJson('/api/telemetry', $payload);
         $response->assertStatus(401);
-        $this->assertEquals('AUTH_REQUIRED_V040', $response->json('error_code'));
+        $this->assertEquals('AUTH_REQUIRED', $response->json('error_code'));
     }
 
     /**

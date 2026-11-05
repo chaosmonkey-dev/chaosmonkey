@@ -539,6 +539,80 @@ class TelemetryController extends Controller
                 'organization_id' => $organizationId
             ]);
 
+            // Resolve bearer token using shared authority — BEFORE validation,
+            // so unauthenticated callers cannot distinguish valid inputs
+            // (e.g. probe organization_id existence) via validation errors.
+            $tokenResolvedOrganizationId = null;
+            $tokenResolvedDeveloperId = null;
+            $tokenResolvedInstallationId = null;
+            $bearerToken = $request->bearerToken();
+            $resolvedApiToken = null;
+
+            if ($bearerToken) {
+                try {
+                    $resolvedApiToken = $this->resolveToken($bearerToken);
+
+                    if ($resolvedApiToken) {
+                        $tokenResolvedOrganizationId = $resolvedApiToken->organization_id;
+                        $tokenResolvedDeveloperId = $this->deriveDeveloperId($resolvedApiToken);
+                        $tokenResolvedInstallationId = $resolvedApiToken->installation_id;
+
+                        Log::info('[TELEMETRY] Resolved identity from API token', [
+                            'token_id' => $resolvedApiToken->id,
+                            'developer_id' => $tokenResolvedDeveloperId,
+                            'organization_id' => $tokenResolvedOrganizationId,
+                        ]);
+                    } else {
+                        Log::warning('[TELEMETRY] Invalid or expired API token');
+                    }
+                } catch (\Throwable $e) {
+                    Log::error('[TELEMETRY] Failed to resolve API token', [
+                        'error' => $e->getMessage()
+                    ]);
+                }
+            }
+
+            // FAIL CLOSED: anonymous ingestion is not accepted. Without this,
+            // any caller could write events into any organization via a forged
+            // organization_id or user_id (see Options A/C below).
+            if (!$resolvedApiToken) {
+                if (!Auth::check()) {
+                    Log::warning('[TELEMETRY] Rejecting unauthenticated telemetry', [
+                        'source' => $request->input('source'),
+                        'has_organization_id' => !empty($organizationId),
+                    ]);
+                    return response()->json([
+                        'status' => 'error',
+                        'message' => 'Telemetry ingestion requires a valid bearer token.',
+                        'error_code' => 'AUTH_REQUIRED'
+                    ], 401);
+                }
+
+                // Session-authenticated writes are attributed strictly to the
+                // caller's own organization — a caller-supplied organization_id
+                // for another tenant is rejected, never honored.
+                $sessionOrganizationId = Auth::user()?->organization_id;
+                if (!$sessionOrganizationId) {
+                    return response()->json([
+                        'status' => 'error',
+                        'message' => 'Your account is not associated with an organization.',
+                        'error_code' => 'NO_ORGANIZATION'
+                    ], 403);
+                }
+                if ($organizationId && (int) $organizationId !== (int) $sessionOrganizationId) {
+                    Log::warning('[TELEMETRY] Cross-organization write denied', [
+                        'user_id' => Auth::id(),
+                        'requested_organization_id' => $organizationId,
+                    ]);
+                    return response()->json([
+                        'status' => 'error',
+                        'message' => 'Cannot write telemetry to another organization.',
+                        'error_code' => 'ORGANIZATION_MISMATCH'
+                    ], 403);
+                }
+                $organizationId = $sessionOrganizationId;
+            }
+
             // Validate base payload structure
             $baseValidation = $request->validate([
                 'source' => 'required|string|max:50',
@@ -722,37 +796,6 @@ class TelemetryController extends Controller
         }
         $sessionMetadata = $firstEventMeta;
 
-        // Resolve bearer token using shared authority
-        $tokenResolvedOrganizationId = null;
-        $tokenResolvedDeveloperId = null;
-        $tokenResolvedInstallationId = null;
-        $bearerToken = $request->bearerToken();
-        $resolvedApiToken = null;
-
-        if ($bearerToken) {
-            try {
-                $resolvedApiToken = $this->resolveToken($bearerToken);
-
-                if ($resolvedApiToken) {
-                    $tokenResolvedOrganizationId = $resolvedApiToken->organization_id;
-                    $tokenResolvedDeveloperId = $this->deriveDeveloperId($resolvedApiToken);
-                    $tokenResolvedInstallationId = $resolvedApiToken->installation_id;
-
-                    Log::info('[TELEMETRY] Resolved identity from API token', [
-                        'token_id' => $resolvedApiToken->id,
-                        'developer_id' => $tokenResolvedDeveloperId,
-                        'organization_id' => $tokenResolvedOrganizationId,
-                    ]);
-                } else {
-                    Log::warning('[TELEMETRY] Invalid or expired API token');
-                }
-            } catch (\Throwable $e) {
-                Log::error('[TELEMETRY] Failed to resolve API token', [
-                    'error' => $e->getMessage()
-                ]);
-            }
-        }
-
         // PHASE 3: Version authority — inspect top-level and ALL event metadata versions
         $extensionVersion = $request->input('extension_version');
         if (!$extensionVersion) {
@@ -782,47 +825,6 @@ class TelemetryController extends Controller
                 'message' => 'Authentication required for extension version 0.4.0+. Provide a valid bearer token.',
                 'error_code' => 'AUTH_REQUIRED_V040'
             ], 401);
-        }
-
-        // FAIL CLOSED: anonymous ingestion is not accepted. Without this,
-        // any caller could write events into any organization via a forged
-        // organization_id or user_id (see Options A/C below).
-        if (!$resolvedApiToken) {
-            if (!Auth::check()) {
-                Log::warning('[TELEMETRY] Rejecting unauthenticated telemetry', [
-                    'source' => $source,
-                    'has_organization_id' => !empty($organizationId),
-                ]);
-                return response()->json([
-                    'status' => 'error',
-                    'message' => 'Telemetry ingestion requires a valid bearer token.',
-                    'error_code' => 'AUTH_REQUIRED'
-                ], 401);
-            }
-
-            // Session-authenticated writes are attributed strictly to the
-            // caller's own organization — a caller-supplied organization_id
-            // for another tenant is rejected, never honored.
-            $sessionOrganizationId = Auth::user()?->organization_id;
-            if (!$sessionOrganizationId) {
-                return response()->json([
-                    'status' => 'error',
-                    'message' => 'Your account is not associated with an organization.',
-                    'error_code' => 'NO_ORGANIZATION'
-                ], 403);
-            }
-            if ($organizationId && (int) $organizationId !== (int) $sessionOrganizationId) {
-                Log::warning('[TELEMETRY] Cross-organization write denied', [
-                    'user_id' => Auth::id(),
-                    'requested_organization_id' => $organizationId,
-                ]);
-                return response()->json([
-                    'status' => 'error',
-                    'message' => 'Cannot write telemetry to another organization.',
-                    'error_code' => 'ORGANIZATION_MISMATCH'
-                ], 403);
-            }
-            $organizationId = $sessionOrganizationId;
         }
 
         // SERVER-AUTHORITATIVE IDENTITY OVERRIDE (applied exactly once)

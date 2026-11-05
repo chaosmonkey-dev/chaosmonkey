@@ -207,7 +207,7 @@ class TelemetryIdentityPathTest extends TestCase
 
         $response = $this->postJson('/api/telemetry', $payload);
         $response->assertStatus(401);
-        $response->assertJson(['error_code' => 'AUTH_REQUIRED_V040']);
+        $response->assertJson(['error_code' => 'AUTH_REQUIRED']);
     }
 
     /**
@@ -287,7 +287,7 @@ class TelemetryIdentityPathTest extends TestCase
 
         $response = $this->postJson('/api/telemetry', $payload);
         $response->assertStatus(401);
-        $response->assertJson(['error_code' => 'AUTH_REQUIRED_V040']);
+        $response->assertJson(['error_code' => 'AUTH_REQUIRED']);
     }
 
     /**
