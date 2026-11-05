@@ -449,14 +449,12 @@ class TelemetryController extends Controller
     }
     public function upload(Request $request)
     {
-        // FAIL CLOSED: same anonymous-ingest policy as store() — a bearer
-        // token, a dashboard session, or explicit opt-in is required.
+        // FAIL CLOSED: same ingestion policy as store() — a bearer token or
+        // dashboard session is required; anonymous writes are not accepted.
         $uploadToken = $request->bearerToken()
             ? $this->resolveToken($request->bearerToken())
             : null;
-        if (!$uploadToken
-            && !Auth::check()
-            && !config('telemetry.allow_anonymous_ingest', false)) {
+        if (!$uploadToken && !Auth::check()) {
             return response()->json(['error' => 'Telemetry ingestion requires a valid bearer token.'], 401);
         }
 
@@ -786,23 +784,45 @@ class TelemetryController extends Controller
             ], 401);
         }
 
-        // FAIL CLOSED: anonymous ingestion is disabled by default. Without
-        // this, any caller could write events into any organization via a
-        // forged organization_id or user_id (see Options A/C below).
-        // Legacy pre-0.4.0 clients on migrated installs may re-enable the
-        // anonymous path via TELEMETRY_ALLOW_ANONYMOUS_INGEST.
-        if (!$resolvedApiToken
-            && !Auth::check()
-            && !config('telemetry.allow_anonymous_ingest', false)) {
-            Log::warning('[TELEMETRY] Rejecting unauthenticated telemetry', [
-                'source' => $source,
-                'has_organization_id' => !empty($organizationId),
-            ]);
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Telemetry ingestion requires a valid bearer token.',
-                'error_code' => 'AUTH_REQUIRED'
-            ], 401);
+        // FAIL CLOSED: anonymous ingestion is not accepted. Without this,
+        // any caller could write events into any organization via a forged
+        // organization_id or user_id (see Options A/C below).
+        if (!$resolvedApiToken) {
+            if (!Auth::check()) {
+                Log::warning('[TELEMETRY] Rejecting unauthenticated telemetry', [
+                    'source' => $source,
+                    'has_organization_id' => !empty($organizationId),
+                ]);
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Telemetry ingestion requires a valid bearer token.',
+                    'error_code' => 'AUTH_REQUIRED'
+                ], 401);
+            }
+
+            // Session-authenticated writes are attributed strictly to the
+            // caller's own organization — a caller-supplied organization_id
+            // for another tenant is rejected, never honored.
+            $sessionOrganizationId = Auth::user()?->organization_id;
+            if (!$sessionOrganizationId) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Your account is not associated with an organization.',
+                    'error_code' => 'NO_ORGANIZATION'
+                ], 403);
+            }
+            if ($organizationId && (int) $organizationId !== (int) $sessionOrganizationId) {
+                Log::warning('[TELEMETRY] Cross-organization write denied', [
+                    'user_id' => Auth::id(),
+                    'requested_organization_id' => $organizationId,
+                ]);
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Cannot write telemetry to another organization.',
+                    'error_code' => 'ORGANIZATION_MISMATCH'
+                ], 403);
+            }
+            $organizationId = $sessionOrganizationId;
         }
 
         // SERVER-AUTHORITATIVE IDENTITY OVERRIDE (applied exactly once)

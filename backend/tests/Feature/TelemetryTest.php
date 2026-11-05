@@ -44,7 +44,7 @@ class TelemetryTest extends TestCase
 
     public function test_telemetry_endpoint_accepts_valid_payload(): void
     {
-        $user = User::factory()->create();
+        $user = User::factory()->create(['organization_id' => $this->org->id]);
 
         $payload = [
             'user_id' => 'test-user',
@@ -82,7 +82,7 @@ class TelemetryTest extends TestCase
 
     public function test_telemetry_endpoint_rejects_invalid_payload(): void
     {
-        $user = User::factory()->create();
+        $user = User::factory()->create(['organization_id' => $this->org->id]);
 
         $response = $this->actingAs($user)->postJson('/api/telemetry', []);
 
@@ -92,7 +92,7 @@ class TelemetryTest extends TestCase
 
     public function test_telemetry_endpoint_is_idempotent_for_duplicate_batches(): void
     {
-        $user = User::factory()->create();
+        $user = User::factory()->create(['organization_id' => $this->org->id]);
 
         $payload = [
             'user_id' => 'dupe-user',
