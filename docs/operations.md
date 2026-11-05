@@ -7,11 +7,12 @@ Everything persistent lives in the `/data` volume:
 ```
 /data/
   database.sqlite        # all application state — accounts, orgs, telemetry
+  .env                   # persistent config, including APP_KEY
 ```
 
-`/var/www/backend/.env` lives in the container; treat it as disposable — the
-entrypoint regenerates it. If you want `.env` changes to survive container
-replacement, set values via `docker -e` / compose `environment:` instead.
+`/var/www/backend/.env` is a symlink to `/data/.env`. The `.env` file survives
+container replacement and upgrades; values passed via `docker -e` /
+compose `environment:` are applied to it on every boot.
 
 ## Backup
 

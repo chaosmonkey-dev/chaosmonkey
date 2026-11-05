@@ -1,13 +1,15 @@
 # ChaosMonkey
 
-**Telemetry and analytics for AI-assisted engineering teams.**
+**Connect AI coding activity to engineering outcomes.**
 
 ChaosMonkey ingests activity from the AI coding tools your team already uses —
 VS Code, Cursor, Claude Code, Codex CLI, Cursor Agents — and turns it into
-session analytics, productivity-by-tool breakdowns, AI-spend estimates, and
-performance insights. It was built and operated as a hosted product with real
-engineering teams and is now open source so anyone can self-host, inspect, and
-extend it.
+session analytics, per-tool workflow breakdowns, configured spend estimates,
+and evidence-gated insights. Session telemetry works standalone; correlating
+sessions with pull requests, reviews, and deployments requires the optional
+GitHub integration. It was built and operated as a hosted product with real
+engineering teams and is now open source so anyone can self-host, inspect,
+and extend it.
 
 ## Quick start (Docker)
 

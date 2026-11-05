@@ -28,7 +28,8 @@ cannot guarantee response times. We will coordinate disclosure with you.
 
 | Version | Supported |
 |---|---|
-| 1.x (latest release) | Yes |
-| < 1.0 | No |
+| 0.1.x (Community Preview) | Security fixes on the latest release only |
 
-Security fixes ship in patch releases on the latest minor line.
+During the `0.x` Community Preview, security fixes ship in the newest release;
+earlier versions are not maintained. Upgrade to the latest release to receive
+fixes.
