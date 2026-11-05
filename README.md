@@ -11,6 +11,9 @@ GitHub integration. It was built and operated as a hosted product with real
 engineering teams and is now open source so anyone can self-host, inspect,
 and extend it.
 
+> **We're open.** `v0.1.0` — Community Preview — is available now under
+> Apache-2.0.
+
 ## Quick start (Docker)
 
 The recommended install is a single all-in-one container — nginx, PHP-FPM,
@@ -39,8 +42,8 @@ infrastructure. GitHub integration is optional; telemetry works without it.
 
 ## What it looks like
 
-*AI Operational Intelligence — five tracked workflows rendered from
-synthetic demo data.*
+*AI Operational Intelligence — six tracked workflows across 23 sessions,
+rendered from synthetic demo data.*
 
 ![ChaosMonkey dashboard — AI Operational Intelligence](docs/screenshots/dashboard.png)
 
@@ -48,6 +51,11 @@ synthetic demo data.*
 (simulated demo data).*
 
 ![Productivity by tool](docs/screenshots/productivity-by-tool.png)
+
+More views — time-series analytics, Performance Insights evidence gating,
+developer enrollment, Pilot Health, and GitHub setup — in the
+[product gallery](docs/product-gallery.md). All gallery screenshots use
+synthetic data.
 
 ## What it does
 
@@ -125,6 +133,20 @@ ChaosMonkey collects **aggregate activity telemetry** — event counts, duration
 tool and session metadata — designed to avoid source code or file contents.
 Self-hosting means your data stays on your infrastructure. See
 [PRIVACY.md](PRIVACY.md) for exactly what each client sends.
+
+## Why ChaosMonkey?
+
+Yes, we know about Netflix's Chaos Monkey.
+
+The original Chaos Monkey made infrastructure failures visible by
+deliberately creating them. Ours is concerned with a different kind of
+chaos: what happens when AI coding tools enter the software development
+lifecycle.
+
+Different monkeys. Different chaos.
+
+*ChaosMonkey is an independent project. It is not affiliated with,
+endorsed by, or connected to Netflix.*
 
 ## License
 
