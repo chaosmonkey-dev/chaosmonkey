@@ -3,7 +3,7 @@
 # ---------------------------------------------------------------------------
 # Stage 1: build the Vue 3 frontend
 # ---------------------------------------------------------------------------
-FROM node:20-alpine AS frontend
+FROM node:26-alpine AS frontend
 WORKDIR /build/frontend
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci --no-audit --no-fund
