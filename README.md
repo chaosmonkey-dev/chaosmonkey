@@ -16,7 +16,7 @@ Laravel, and a persistent SQLite database:
 
 ```bash
 docker run -d --name chaosmonkey \
-  -p 8080:80 \
+  -p 127.0.0.1:8080:80 \
   -v chaosmonkey-data:/data \
   ghcr.io/chaosmonkey-dev/chaosmonkey:0.1.0
 ```
@@ -37,8 +37,8 @@ infrastructure. GitHub integration is optional; telemetry works without it.
 
 ## What it looks like
 
-*AI Operational Intelligence — five tracked workflows from real sessions
-(simulated demo data).*
+*AI Operational Intelligence — five tracked workflows rendered from
+synthetic demo data.*
 
 ![ChaosMonkey dashboard — AI Operational Intelligence](docs/screenshots/dashboard.png)
 
@@ -66,12 +66,16 @@ infrastructure. GitHub integration is optional; telemetry works without it.
 
 | Tool | Client | Package version | Status |
 |---|---|---|---|
-| VS Code / Cursor IDE | `extensions/chaosmonkey-telemetry` (VSIX) | 0.4.1 | Package-verified; production-observed pre-release |
-| Claude Code | `extensions/claude-code-bridge` | 0.4.2-cc-bridge | End-to-end verified (install → hooks → ingest) |
-| Cursor Agents Window | `extensions/cursor-agent-bridge` | 0.4.2-cursor-bridge | End-to-end verified (install → hooks → ingest) |
-| Codex CLI | `extensions/codex-bridge` | 0.4.1-codex-bridge | End-to-end verified (install → hooks → ingest); requires hook-trust in Codex |
+| VS Code / Cursor IDE | `extensions/chaosmonkey-telemetry` (VSIX) | 0.4.1 | Packaged artifact verified; authenticated ingest tested |
+| Claude Code | `extensions/claude-code-bridge` | 0.4.2-cc-bridge | Verified via packaged install → hook invocation → ingest\* |
+| Cursor Agents Window | `extensions/cursor-agent-bridge` | 0.4.2-cursor-bridge | Verified via packaged install → hook invocation → ingest\* |
+| Codex CLI | `extensions/codex-bridge` | 0.4.1-codex-bridge | Verified via packaged install → hook invocation → ingest\*; requires hook-trust in Codex |
 | GitHub OAuth | backend | — | Optional; config + callback tested |
 | GitHub App | backend | — | Optional; webhook signature handling tested |
+
+\* Verification used the packaged client artifacts with hook events invoked
+against a live local instance. Sessions from the vendor tools themselves were
+not independently exercised as part of release testing.
 
 Packaged client artifacts are served by the backend itself
 (`/api/*/download/latest`), so installs always get the version matching their

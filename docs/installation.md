@@ -12,7 +12,7 @@ Pull the published image (multi-arch, amd64 + arm64):
 ```bash
 docker pull ghcr.io/chaosmonkey-dev/chaosmonkey:0.1.0
 docker run -d --name chaosmonkey \
-  -p 8080:80 \
+  -p 127.0.0.1:8080:80 \
   -v chaosmonkey-data:/data \
   ghcr.io/chaosmonkey-dev/chaosmonkey:0.1.0
 ```
@@ -24,13 +24,20 @@ git clone https://github.com/chaosmonkey-dev/chaosmonkey.git
 cd chaosmonkey
 docker build -t chaosmonkey .
 docker run -d --name chaosmonkey \
-  -p 8080:80 \
+  -p 127.0.0.1:8080:80 \
   -v chaosmonkey-data:/data \
   chaosmonkey
 ```
 
 Pin an explicit version tag (`0.1.0`) rather than `latest` — releases are
 immutable and upgrades are deliberate.
+
+> **Network exposure**: the quickstart binds to loopback only
+> (`127.0.0.1:8080`), so the install is reachable only from the local machine.
+> To serve other machines or your team, change the port mapping to
+> `-p 8080:80` and put a TLS-terminating reverse proxy in front — see
+> [HTTPS](#https) and [operations](operations.md#remote-hosting). Never expose
+> the app to a network without TLS.
 
 The container performs first-run initialization automatically: it writes
 `.env`, generates `APP_KEY`, creates `/data/database.sqlite`, and runs
@@ -96,7 +103,7 @@ produces correct HTTPS URLs.
 ```bash
 docker build -t chaosmonkey .
 docker stop chaosmonkey && docker rm chaosmonkey
-docker run -d --name chaosmonkey -p 8080:80 -v chaosmonkey-data:/data chaosmonkey
+docker run -d --name chaosmonkey -p 127.0.0.1:8080:80 -v chaosmonkey-data:/data chaosmonkey
 ```
 
 The `/data` volume survives replacement; migrations run automatically. Always

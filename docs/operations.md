@@ -45,15 +45,32 @@ newer image re-runs only the missing migrations.
 
 ## Upgrades
 
-Rebuild the image, replace the container, keep the volume:
+Pull the new pinned image, replace the container, keep the volume:
 
 ```bash
-docker build -t chaosmonkey .
+docker pull ghcr.io/chaosmonkey-dev/chaosmonkey:0.1.0   # pin the new version
 docker stop chaosmonkey && docker rm chaosmonkey
-docker run -d --name chaosmonkey -p 8080:80 -v chaosmonkey-data:/data chaosmonkey
+docker run -d --name chaosmonkey -p 127.0.0.1:8080:80 -v chaosmonkey-data:/data \
+  ghcr.io/chaosmonkey-dev/chaosmonkey:0.1.0
 ```
 
 **Always back up before upgrading.**
+
+## Remote hosting
+
+The quickstart binds to loopback (`127.0.0.1:8080`) so a fresh install is only
+reachable from the local machine. Exposing ChaosMonkey to your network or the
+internet is a deliberate step:
+
+1. Bind a non-loopback address — replace the port mapping with `-p 8080:80`
+   (all interfaces) or `-p <host-ip>:8080:80` for a specific interface.
+2. Terminate TLS in front of it — see
+   [installation.md#https](installation.md#https). Do not serve ChaosMonkey to
+   other users over plain HTTP.
+3. Set `APP_URL`, `APP_FRONTEND_URL`, `CORS_ALLOWED_ORIGINS`, and
+   `SESSION_SECURE_COOKIES=true` to your HTTPS origin.
+4. Restrict access at the proxy or firewall layer if the instance should be
+   team-internal. Anyone who can reach the app can attempt login and OAuth.
 
 ## Health checks
 
