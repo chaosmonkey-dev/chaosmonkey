@@ -42,17 +42,19 @@ infrastructure. GitHub integration is optional; telemetry works without it.
 
 ## What it looks like
 
-*AI Operational Intelligence — six tracked workflows across 23 sessions,
-rendered from synthetic demo data.*
+*AI Operational Intelligence — per-workflow session analytics across 226
+sessions, rendered from synthetic demo data.*
 
 ![ChaosMonkey dashboard — AI Operational Intelligence](docs/screenshots/dashboard.png)
 
-*Productivity by tool — per-workflow AI activity and session metrics
-(simulated demo data).*
+*Productivity by tool — time-series analytics: per-workflow metrics plotted
+across six weeks, with period, cohort, developer, repository, and
+workflow-comparison filters (synthetic demo data).*
 
-![Productivity by tool](docs/screenshots/productivity-by-tool.png)
+![Productivity by tool — time series](docs/screenshots/pbt-time-series.png)
 
-More views — time-series analytics, Performance Insights evidence gating,
+More views — including [Performance Insights](docs/product-gallery.md#performance-insights)
+(qualified findings and the honest evidence-gated state), summary cards,
 developer enrollment, Pilot Health, and GitHub setup — in the
 [product gallery](docs/product-gallery.md). All gallery screenshots use
 synthetic data.
