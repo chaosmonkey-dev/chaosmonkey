@@ -72,6 +72,18 @@ hosted→self-hosted procedure.
 - Session-primitive cache keys are now tenant-sensitive via a
   non-reversible token fingerprint; token material is never stored or
   logged.
+- **Runtime dependencies updated to resolve all locked Composer
+  advisories** (56 → 0): `laravel/framework` 12.73, `symfony/*` 7.4,
+  `guzzlehttp/*` and `league/commonmark` patch/minor updates within
+  existing constraints. A `conflict` bound keeps dependency resolution
+  within the PHP 8.2 runtime. `composer audit --locked` reports zero
+  advisories at release time.
+
+### Known limitations
+
+- The **first HTTP request on a freshly started container is slow**
+  (~20 s at large data volumes) while PHP/Laravel caches warm; steady
+  state is sub-second. Subsequent requests are unaffected.
 
 ## [0.1.2] — Community Preview
 
