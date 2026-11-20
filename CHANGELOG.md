@@ -5,6 +5,74 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.3] — Community Preview
+
+Performance and migration-readiness release. **All users should run `0.1.3`;
+`0.1.0`–`0.1.2` are superseded.**
+
+This release carries the corrections needed for self-hosted migration at
+established data volumes — see `MIGRATION.md` for the full
+hosted→self-hosted procedure.
+
+### Fixed
+
+- **Dashboard responsiveness at large evidence volumes.** The session→PR
+  attribution pass evaluated every session against every pull request
+  (O(sessions × PRs) — tens of millions of pair evaluations at established
+  volumes). PR evidence is now indexed by normalized repository once, and
+  only same-repository candidates are evaluated; cross-repository and
+  missing-repository pairs are skipped exactly, preserving classification
+  semantics. This eliminates a multi-second main-thread block that could
+  freeze the browser on the largest dashboards.
+- **`/api/metrics` latency.** The metrics path no longer performs
+  synchronous GitHub OAuth enrichment when GitHub App evidence is already
+  authoritative, and the OAuth repository-authority lookup is cached
+  per-organization/token for five minutes instead of re-fetching on every
+  request. Metrics requests that previously timed out at ~30s on large
+  datasets now complete within budget (rehearsal-verified).
+- **Review-count provenance.** `review_count` now counts only submitted
+  review records (populated via `github:app-sync --enrich-reviews`), never
+  requested reviewers; requested reviewers are pending invites, not
+  completed reviews.
+- **Metric semantics.** Deployment failure rate (percentage of finalized
+  failed deployment outcomes across observed environments) is reported
+  separately from DORA change failure rate, which is not derivable from
+  deployment status alone and now reports `null` rather than a misleading
+  figure. Review-cycle and reopen-history fields likewise report `null`
+  when per-review timeline evidence is unavailable, instead of
+  fabricating zeroes. Merge rate is a same-cohort retrospective rate
+  (PRs created in a week that have merged as of observation time), with
+  cohorts under 14 days marked immature. Release counts are `null` when
+  release evidence is unavailable (e.g., contents permission absent)
+  rather than a false zero. Environment classification is conservative:
+  ambiguous values report as `unknown`, not production or non-production.
+- **Historical evidence windows** are disclosed via
+  `evidence_window_start`, `evidence_window_basis`, and
+  `evidence_partial` metadata on metrics responses.
+
+### Added
+
+- **`github:app-sync` artisan command** — historical GitHub evidence
+  synchronization via the App installation token (OAuth-independent).
+  Idempotent upserts, `--dry-run` inventory mode, resumable via
+  `--from-repo`, with `--enrich-reviews`, `--include-deployments`, and
+  `--include-releases` options. Required for webhook-gap recovery during
+  migration cutover; see `MIGRATION.md`.
+- **In-flight OAuth status deduplication** — concurrent dashboard
+  components share one `/api/github/oauth/status` request rather than
+  firing duplicate calls.
+- **`MIGRATION.md`** — customer-facing self-hosted migration guide:
+  VM prerequisites, Docker Compose, TLS/reverse proxy, encrypted SQLite
+  transfer and restore, customer-owned GitHub App and OAuth setup,
+  telemetry endpoint repointing, validation checklist, cutover and
+  rollback.
+
+### Security
+
+- Session-primitive cache keys are now tenant-sensitive via a
+  non-reversible token fingerprint; token material is never stored or
+  logged.
+
 ## [0.1.2] — Community Preview
 
 Security hardening release. **All users should run `0.1.2`; `0.1.0` and

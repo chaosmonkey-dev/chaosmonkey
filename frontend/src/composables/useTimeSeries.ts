@@ -27,11 +27,14 @@ export function useTimeSeries(queryRef: ComputedRef<ProductivityQuery>, enabled:
   const deliveryAttributionAuthority = ref<DeliveryAttributionAuthority>('org')
   // CR-X C: Delivery provenance — 'cm_activity_sim' = Local demo, 'live' = real GitHub, 'error' = fetch failed
   const deliverySource = ref<string>('unknown')
+  const deliveryEvidenceRepos = ref<string[]>([])
   // CR-X PBT-CLEANUP-4: Explicit delivery error state — ERROR != EMPTY != LOADING.
   // When delivery fetch fails, this is set to an error message. When it succeeds
   // (even with zero rows), this is cleared. The component uses this to render
   // an explicit "delivery unavailable" state instead of a false empty/zero.
   const deliveryError = ref<string | null>(null)
+  // Raw delivery meta (availability flags, evidence window, metric bases)
+  const deliveryMeta = ref<Record<string, any>>({})
   
   // Request management
   let currentRequestId = 0
@@ -172,6 +175,10 @@ export function useTimeSeries(queryRef: ComputedRef<ProductivityQuery>, enabled:
         const authority = deliveryResult.meta?.attribution_authority ?? 'org'
         deliveryAttributionAuthority.value = authority
         deliverySource.value = deliveryResult.meta?.source ?? 'unknown'
+        deliveryMeta.value = deliveryResult.meta ?? {}
+        deliveryEvidenceRepos.value = Array.isArray(deliveryResult.meta?.evidence_repos)
+          ? deliveryResult.meta.evidence_repos
+          : []
         if (deliveryResult.series.length > 0) {
           const singleSeries = buildDeliverySeries(
             deliveryResult.series,
@@ -446,8 +453,10 @@ export function useTimeSeries(queryRef: ComputedRef<ProductivityQuery>, enabled:
     deliverySeries,
     deliveryAttributionAuthority,
     deliverySource,
+    deliveryEvidenceRepos,
     // CR-X PBT-CLEANUP-4: Explicit delivery error state
     deliveryError,
+    deliveryMeta,
 
     // Actions
     refresh,

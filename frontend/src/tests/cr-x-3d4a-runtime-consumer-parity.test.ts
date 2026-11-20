@@ -187,6 +187,17 @@ function buildCanonicalInput(snapshot: any, costConfigs?: any[]): CanonicalInsig
   return {
     sessionRows: [],
     githubByPeriod: CURRENT_PERIODS,
+    // PR-window authority: the windowed throughput generator reads weekly
+    // PR created_at buckets (ISO week-start dates), not the deployment
+    // observation window.
+    prByPeriod: [
+      { period: '2026-03-30', total_pr_count: 8 },
+      { period: '2026-04-06', total_pr_count: 9 },
+      { period: '2026-04-13', total_pr_count: 9 },
+      { period: '2026-04-20', total_pr_count: 8 },
+      { period: '2026-04-27', total_pr_count: 9 },
+      { period: '2026-05-04', total_pr_count: 8 },
+    ],
     githubSnapshot: snapshot,
     externalCostConfigs: costConfigs ?? CURRENT_COST_CONFIGS,
   }

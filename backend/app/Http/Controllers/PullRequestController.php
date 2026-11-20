@@ -861,6 +861,12 @@ class PullRequestController extends Controller
             'unique_reviewer_count' => $totalUniqueReviewerCount,
             'pr_reopened_count' => $totalPRReopenedCount,
             'total_prs' => $totalPRs,
+            // Provenance for review semantics: review_count = submitted review
+            // records fetched via the App reviews API (enrich-reviews). Reopen
+            // history requires the Issues events API (not granted) — only
+            // live webhook-observed reopens populate pr_reopened_count.
+            'reviews_source' => 'github_app_reviews_api',
+            'reopen_history' => 'unavailable_no_issues_permission',
         ];
     }
 
@@ -927,8 +933,16 @@ class PullRequestController extends Controller
         $weeksInPeriod = max(1, $periodDays / 7);
         $deploymentFrequency = $weeksInPeriod > 0 ? round($totalDeployments / $weeksInPeriod, 2) : 0.0;
 
-        // Calculate change_failure_rate (% of deployments that failed)
-        $changeFailureRate = $totalDeployments > 0 ? round(($failedDeploymentCount / $totalDeployments) * 100, 1) : 0.0;
+        // Deployment failure rate: % of finalized deployments that failed,
+        // across ALL observed environments. This is NOT DORA change failure
+        // rate — a failed deployment_status is a delivery outcome, not a
+        // verified production-impacting change failure.
+        $deploymentFailureRate = $totalDeployments > 0 ? round(($failedDeploymentCount / $totalDeployments) * 100, 1) : null;
+
+        // DORA change failure rate requires production-impacting failure
+        // evidence (degraded service/remediation), which deployment_status
+        // alone cannot establish. Emit null — never a proxy.
+        $changeFailureRate = null;
 
         // CR5 FINAL DOWNSTREAM — deployment_reliability block.
         // Real measured deployment reliability from the deployments table:
@@ -945,6 +959,9 @@ class PullRequestController extends Controller
             'success_deployment_count' => $successDeploymentCount,
             'deployment_frequency' => $deploymentFrequency,
             'change_failure_rate' => $changeFailureRate,
+            'deployment_failure_rate' => $deploymentFailureRate,
+            'deployment_failure_rate_scope' => 'all_environments',
+            'change_failure_rate_unavailable' => 'deployment_status failure does not establish production-impacting change failure; CFR requires incident/remediation evidence not present in deployment records',
             'rollback_detected' => false,
             'deploy_to_incident_time' => null,
             'deployment_reliability' => $deploymentReliability,
@@ -970,7 +987,21 @@ class PullRequestController extends Controller
         $failed = $deployments->where('deployment_status', 'failure')->count();
         $successRate = $total > 0 ? round(($success / $total) * 100, 1) : 0.0;
 
-        $production = $deployments->where('environment', 'production');
+        // Conservative environment classification. Original env strings are
+        // preserved; production claims require an explicit match. Ambiguous
+        // names (e.g. 'main') classify as UNKNOWN — never silently counted as
+        // either production or non-production. CI plan/publish artifact names
+        // (*-plan, release-publish) are pipeline stages, not production.
+        $envClasses = [];
+        $production = $deployments->filter(function ($d) use (&$envClasses) {
+            $cls = $this->classifyDeploymentEnvironment($d->environment);
+            $envClasses[$d->environment] = $cls;
+            return $cls === 'production';
+        });
+        $unknown = $deployments->filter(function ($d) use (&$envClasses) {
+            $cls = $envClasses[$d->environment] ?? $this->classifyDeploymentEnvironment($d->environment);
+            return $cls === 'unknown';
+        });
         $productionTotal = $production->count();
         $productionFailed = $production->where('deployment_status', 'failure')->count();
         $stagingTotal = $deployments->where('environment', 'staging')->count();
@@ -994,10 +1025,33 @@ class PullRequestController extends Controller
             'success_rate' => $successRate,
             'production_total' => $productionTotal,
             'production_failed' => $productionFailed,
+            'production_failure_rate' => $productionTotal > 0
+                ? round(($productionFailed / $productionTotal) * 100, 1) : null,
+            'unknown_environment_total' => $unknown->count(),
+            'environment_classification' => $envClasses,
             'staging_total' => $stagingTotal,
             'observed_days' => $observedDays,
             'rollback_count' => $rollbackCount,
         ];
+    }
+
+    /**
+     * Conservative environment-name → class mapping for deployment reliability.
+     *
+     * - 'production': names verified as production by convention and traffic.
+     * - 'non_production': dev/stage envs and CI plan/publish artifact names.
+     * - 'unknown': ambiguous names ('main', future envs) — never auto-promoted.
+     */
+    private function classifyDeploymentEnvironment(?string $env): string
+    {
+        $e = strtolower(trim((string) $env));
+        return match (true) {
+            in_array($e, ['production', 'prod', 'app-production'], true) => 'production',
+            in_array($e, ['dev', 'app-dev', 'stage', 'staging', 'stage-plan',
+                          'terraform', 'terraform-plan', 'prod-plan',
+                          'release-publish'], true) => 'non_production',
+            default => 'unknown',
+        };
     }
 
     /**
@@ -1245,7 +1299,7 @@ class PullRequestController extends Controller
                     ? ($total / ($periodDays / 7))
                     : $total;
 
-                $changeFailureRatePct = $total > 0
+                $deploymentFailureRatePct = $total > 0
                     ? round(($failed / $total) * 100, 1)
                     : 0.0;
 
@@ -1255,7 +1309,8 @@ class PullRequestController extends Controller
                     'successful_deployment_count' => (int)$data['success_deployments'],
                     'failed_deployment_count' => (int)$failed,
                     'deploymentFreqPerWeek' => round($deploymentFreqPerWeek, 2),
-                    'changeFailureRatePct' => $changeFailureRatePct,
+                    'deploymentFailureRatePct' => $deploymentFailureRatePct,
+                    'changeFailureRatePct' => $deploymentFailureRatePct,
                 ];
             }
 
@@ -1304,7 +1359,7 @@ class PullRequestController extends Controller
                 if (isset($resultMap[$pk])) {
                     $result[] = $resultMap[$pk];
                     $seededDeploymentVals[] = $resultMap[$pk]['deploymentFreqPerWeek'];
-                    $seededCFRVals[] = $resultMap[$pk]['changeFailureRatePct'];
+                    $seededCFRVals[] = $resultMap[$pk]['deploymentFailureRatePct'];
                     continue;
                 }
 
@@ -1357,8 +1412,8 @@ class PullRequestController extends Controller
                 $delta = $snapshotCFR - $mean;
                 if (abs($delta) > 0.1) {
                     foreach ($result as $idx => $r) {
-                        $adjusted = $r['changeFailureRatePct'] + $delta;
-                        $result[$idx]['changeFailureRatePct'] = round(max(0, min(100, $adjusted)), 1);
+                        $adjusted = $r['deploymentFailureRatePct'] + $delta;
+                        $result[$idx]['deploymentFailureRatePct'] = round(max(0, min(100, $adjusted)), 1);
                     }
                 }
             }
@@ -1809,7 +1864,7 @@ class PullRequestController extends Controller
                         'deployment_frequency' => 0.0,
                         'failed_deployment_count' => 0,
                         'rollback_detected' => false,
-                        'change_failure_rate' => 0.0,
+                        'change_failure_rate' => null,
                         'latest_deployment' => ['deployed_at' => null]
                     ];
                     
@@ -2516,6 +2571,31 @@ class PullRequestController extends Controller
         $query->whereIn('repo_name', $repoAllowList);
     }
 
+    /**
+     * GitHub-App-ingested evidence repositories.
+     *
+     * Rows written by the verified installation-token ingestion path
+     * (data_source='github_app') are organization evidence by contract of
+     * the authenticated GitHub App installation — independent of what the
+     * connected OAuth account can see. Used ONLY for metrics presentation
+     * scoping; it does not broaden OAuth sync authorization.
+     */
+    private function resolveAppEvidenceRepos(): array
+    {
+        $repos = [];
+        foreach ([PullRequest::class, \App\Models\Deployment::class, \App\Models\Release::class] as $model) {
+            try {
+                $repos = array_merge(
+                    $repos,
+                    $model::query()->where('data_source', 'github_app')->distinct()->pluck('repo_name')->filter()->all()
+                );
+            } catch (\Throwable $e) {
+                // Model/table/column may not exist on this deployment — skip.
+            }
+        }
+        return array_values(array_unique($repos));
+    }
+
     private function computeMetricsFresh(Request $request)
     {
         // 🔥 STRICT EXCEPTION BOUNDARY - Prevent HTML 500s
@@ -2731,10 +2811,18 @@ class PullRequestController extends Controller
         'oauthUser_login' => $oauthUser['login'] ?? null,
             'has_session_user' => !empty(session('github_user_data')),
         ]);
-        
+
+        // CR-X SI: Evidence authority for metrics presentation = OAuth
+        // customer-repo allow-list UNION GitHub-App-ingested repos. App
+        // rows are org evidence via the verified installation; they must not
+        // be hidden by an empty OAuth allow-list. Presentation scope only —
+        // OAuth sync authorization is unaffected.
+        $appEvidenceRepos = $this->resolveAppEvidenceRepos();
+        $evidenceRepoAllowList = array_values(array_unique(array_merge($repoAllowList, $appEvidenceRepos)));
+
         // Build query with optional repository and developer filters
         $prQuery = PullRequest::query();
-        $this->applyOrganizationRepoFilter($prQuery, $repoAllowList, $repo);
+        $this->applyOrganizationRepoFilter($prQuery, $evidenceRepoAllowList, $repo);
         if ($developerId) {
             $prQuery->where('developer_id', $developerId);
         }
@@ -2768,7 +2856,7 @@ class PullRequestController extends Controller
         $cursorUsageDetected = $cursorUsageInPRs > 0 || $cursorUsageData > 0;
 
         // Calculate team metrics
-        $teamMetrics = $this->calculateTeamMetrics($repo, $developerId, $timeFilter, $repoAllowList);
+        $teamMetrics = $this->calculateTeamMetrics($repo, $developerId, $timeFilter, $evidenceRepoAllowList);
         
         // DEMO MODE: Prioritize DB operational realism over GitHub enrichment
         if ($demoMode) {
@@ -2783,10 +2871,10 @@ class PullRequestController extends Controller
         $ideMetrics = $this->calculateIDEMetrics($developerId, $timeFilter);
         
         // Calculate detailed PR analytics (fallback to DB if GitHub data not available)
-        $prAnalytics = $this->calculatePRAnalytics($repo, $developerId, $timeFilter, $oauthToken, $repoAllowList);
+        $prAnalytics = $this->calculatePRAnalytics($repo, $developerId, $timeFilter, $oauthToken, $evidenceRepoAllowList);
 
         // Calculate deployment metrics
-        $deploymentMetrics = $this->getLatestDeploymentMetrics($repo, $repoAllowList);
+        $deploymentMetrics = $this->getLatestDeploymentMetrics($repo, $evidenceRepoAllowList);
 
         $metrics = [
             'total_pull_requests' => $totalPRs,
@@ -2831,26 +2919,26 @@ class PullRequestController extends Controller
             'developerId' => $developerId,
             'timeFilter' => $timeFilter
         ]);
-        $metrics['pr_review_metrics'] = $this->calculatePRReviewMetrics($repo, $developerId, $timeFilter, $repoAllowList);
+        $metrics['pr_review_metrics'] = $this->calculatePRReviewMetrics($repo, $developerId, $timeFilter, $evidenceRepoAllowList);
         
         // Deployment metrics - using actual collected data
-        $metrics['deployment_metrics'] = $this->calculateDeploymentMetrics($repo, $developerId, $timeFilter, $repoAllowList);
+        $metrics['deployment_metrics'] = $this->calculateDeploymentMetrics($repo, $developerId, $timeFilter, $evidenceRepoAllowList);
 
         // Release metrics — gated by isEngineeringEvidenceEligible
-        $metrics['release_metrics'] = $this->calculateReleaseMetrics($repo, $timeFilter, $repoAllowList, $oauthUser);
+        $metrics['release_metrics'] = $this->calculateReleaseMetrics($repo, $timeFilter, $evidenceRepoAllowList, $oauthUser);
 
         // Real per-period deployment aggregation (seeded to 8-12 weekly periods)
-        $metrics['github_by_period'] = $this->aggregateDeploymentsByPeriod($repo, $timeFilter, $metrics, $repoAllowList);
+        $metrics['github_by_period'] = $this->aggregateDeploymentsByPeriod($repo, $timeFilter, $metrics, $evidenceRepoAllowList);
 
         // PR per-period aggregation — exact integer merged_pr_count per weekly period
         // Used by Unit Economics V1 for same-window outcome denominators
-        $metrics['pr_by_period'] = $this->aggregatePRsByPeriod($repo, $timeFilter, $repoAllowList);
+        $metrics['pr_by_period'] = $this->aggregatePRsByPeriod($repo, $timeFilter, $evidenceRepoAllowList);
 
         // OUTCOMES BY MONTH — Unit Economics V1 exact observed-row authority
         // Computed DIRECTLY from actual dated rows grouped by calendar month.
         // NOT derived from weekly buckets, rates, or fallbacks.
         // Each entry has count_authority = 'observed_rows'.
-        $metrics['outcomes_by_month'] = $this->aggregateOutcomesByMonth($repoAllowList, $oauthUser);
+        $metrics['outcomes_by_month'] = $this->aggregateOutcomesByMonth($evidenceRepoAllowList, $oauthUser);
 
         // If OAuth is available, enhance the data with GitHub API calls
         if (config('services.chaosmonkey.metrics_debug') === 'true') {
@@ -2864,7 +2952,23 @@ class PullRequestController extends Controller
             ]);
         }
         
-        if ($oauthToken && $oauthUser && $this->isEngineeringEvidenceEligible($oauthUser)) {
+        // When GitHub App DB evidence is authoritative and the OAuth
+        // allow-list is empty, live OAuth enrichment can only return
+        // personal-repo data that must not contaminate org metrics — skip
+        // the synchronous GitHub round-trips entirely (they also cost ~5-7s).
+        // OAuth-only orgs (no App evidence) and mixed-authority orgs keep
+        // the existing live-fetch path unchanged.
+        $skipLiveGithubEnrichment = !empty($appEvidenceRepos) && empty($repoAllowList);
+        if ($skipLiveGithubEnrichment) {
+            // Contract requires github_fetch_debug to be present; record why
+            // the live fetch was skipped rather than leaving it unset.
+            $metrics['github_fetch_debug'] = [
+                'skipped' => 'app_evidence_authoritative',
+                'reason' => 'github_app db evidence is authoritative and OAuth repo allow-list is empty; live OAuth fetch would return no org-visible data',
+                'app_evidence_repo_count' => count($appEvidenceRepos),
+            ];
+        }
+        if ($oauthToken && $oauthUser && $this->isEngineeringEvidenceEligible($oauthUser) && !$skipLiveGithubEnrichment) {
             try {
                 Log::info('=== GITHUB API ENRICHMENT START ===', [
                     'user' => $oauthUser['login'] ?? 'unknown',
@@ -2894,7 +2998,7 @@ class PullRequestController extends Controller
                     // BYPASS GITHUB CACHE FOR DEMO MODE
                     if ($request->get('github_nocache') == 1) {
                         Log::info("[PI_GITHUB_REFRESH] BYPASSING GITHUB CACHE - FETCHING FRESH");
-                        $enhancedData = $this->fetchEnhancedGitHubData($oauthToken, $repo, $developerId, $timeFilter, $githubTimeout, $demoMode, $teamMetrics);
+                        $enhancedData = $this->fetchEnhancedGitHubData($oauthToken, $repo, $developerId, $timeFilter, $githubTimeout, $demoMode, $teamMetrics, $evidenceRepoAllowList);
                         $enhancedData['github_enrichment_status'] = 'fresh';
                         Log::info("[PI_GITHUB_REFRESH] GITHUB DATA FETCHED FRESH", [
                             'github_cache_bypassed' => true,
@@ -2920,7 +3024,7 @@ class PullRequestController extends Controller
                             Log::info("GitHub enrichment using cached data", ['cache_key' => $cacheKey, 'age_seconds' => $enhancedData['github_cache_age_seconds']]);
                         } else {
                             // Fetch fresh data
-                            $enhancedData = $this->fetchEnhancedGitHubData($oauthToken, $repo, $developerId, $timeFilter, $githubTimeout, $demoMode, $teamMetrics);
+                            $enhancedData = $this->fetchEnhancedGitHubData($oauthToken, $repo, $developerId, $timeFilter, $githubTimeout, $demoMode, $teamMetrics, $evidenceRepoAllowList);
                             
                             // Check if rate limited or failed
                             if (isset($enhancedData['github_fetch_debug']['rate_limit']['remaining']) && $enhancedData['github_fetch_debug']['rate_limit']['remaining'] <= 0) {
@@ -2997,7 +3101,10 @@ class PullRequestController extends Controller
                                      is_array($enhancedData['github_team_metrics']) &&
                                      !empty($enhancedData['github_team_metrics']) &&
                                      isset($enhancedData['github_team_metrics']['total_prs']) && 
-                                     isset($enhancedData['github_team_metrics']['merged_prs']);
+                                     isset($enhancedData['github_team_metrics']['merged_prs']) &&
+                                     // CR-X SI: an authority-scoped fetch that contributes zero
+                                     // in-scope PRs must not override persisted org evidence.
+                                     ($enhancedData['github_team_metrics']['total_prs'] ?? 0) > 0;
                 
                 // Initialize data truth flags
                 $githubOAuthConnected = !empty($oauthToken);
@@ -3072,7 +3179,7 @@ class PullRequestController extends Controller
                             'function' => 'calculatePRAnalytics (DB fallback in demo mode)',
                             'demo_mode' => $demoMode
                         ]);
-                        $metrics['pr_analytics'] = $this->calculatePRAnalytics($repo, $developerId, $timeFilter, $oauthToken, $repoAllowList);
+                        $metrics['pr_analytics'] = $this->calculatePRAnalytics($repo, $developerId, $timeFilter, $oauthToken, $evidenceRepoAllowList);
                     }
                     
                     // Copy enriched PR analytics fields to top-level metrics
@@ -3095,7 +3202,7 @@ class PullRequestController extends Controller
                         'function' => 'calculatePRAnalytics (DB fallback)',
                         'all_prs_empty' => true
                     ]);
-                    $metrics['pr_analytics'] = $this->calculatePRAnalytics($repo, $developerId, $timeFilter, $oauthToken, $repoAllowList);
+                    $metrics['pr_analytics'] = $this->calculatePRAnalytics($repo, $developerId, $timeFilter, $oauthToken, $evidenceRepoAllowList);
                 }
                 
                 // IMPORTANT: Only use GitHub API data if it has actual data, otherwise keep database results
@@ -3298,11 +3405,15 @@ class PullRequestController extends Controller
             'live_fetch_ok' => $metrics['github_live_fetch_ok'] ?? false,
             'db_data_available' => $metrics['github_db_data_available'] ?? false,
             'historical_data_available' => $githubHistoricalDataAvailable,
-            'repo_count' => $metrics['total_repositories'] ?? 0,
+            'repo_count' => count($evidenceRepoAllowList ?? ($metrics['repositories'] ?? [])),
             'commit_count' => $metrics['all_commits_total'] ?? 0,
             'pr_count' => $metrics['total_pull_requests'] ?? 0,
             // CR-X 18B: customer repository authority gate
             'repo_authority' => $this->hasCustomerRepoAuthority || ($githubConnectionReason === 'database_oauth_request_bound'),
+            // CR-X SI: evidence scope — which repos actually contribute to
+            // the GitHub metrics above, split by evidence source.
+            'app_ingested_repos' => $appEvidenceRepos ?? [],
+            'evidence_repos' => $evidenceRepoAllowList ?? [],
         ];
 
         // CR5 FINAL DOWNSTREAM — Local demo GitHub provenance.
@@ -3544,7 +3655,10 @@ class PullRequestController extends Controller
         $metrics['stale_deployment_signal'] = $this->calculateStaleDeploymentSignal($metrics['deployment_metrics'] ?? []);
         $metrics['failed_deployment_pressure'] = $this->calculateFailedDeploymentPressure($metrics['deployment_metrics'] ?? []);
         
-        $metrics['change_failure_rate'] = $this->calculateChangeFailureRate($metrics['deployment_metrics'] ?? [], $metrics['pr_analytics'] ?? []);
+        // DORA CFR is not derivable from deployment_status alone — emit null.
+        // The measured quantity is all-environment deployment failure rate.
+        $metrics['change_failure_rate'] = null;
+        $metrics['deployment_failure_rate'] = $this->calculateChangeFailureRate($metrics['deployment_metrics'] ?? [], $metrics['pr_analytics'] ?? []);
         $metrics['reliability_lag_risk'] = $this->calculateReliabilityLagRisk($metrics['deployment_metrics'] ?? [], $metrics['github_team_metrics'] ?? []);
         $metrics['latest_deployment_status'] = $this->calculateLatestDeploymentStatus($metrics['deployment_metrics'] ?? []);
 
@@ -3818,7 +3932,41 @@ class PullRequestController extends Controller
         // a schema migration. Same org/repo/developer/time filters as the
         // authoritative pr_analytics block. No SHA/branch lineage (Track A P0-B).
         // Per-PR data_source provenance is preserved truthfully.
-        $metrics['prs'] = $this->buildPrEvidenceArray($repo, $developerId, $timeFilter, $repoAllowList);
+        $metrics['prs'] = $this->buildPrEvidenceArray($repo, $developerId, $timeFilter, $evidenceRepoAllowList);
+
+        // CR-X SI: when persisted DB evidence is the metrics source, expose
+        // the real PR rows in the drilldown-consumable all_prs shape so
+        // metric-details shows org evidence instead of OAuth/live lists or
+        // an empty "details_not_available" state.
+        if (($metrics['github_data_source'] ?? null) === 'db_sync'
+            && empty($metrics['all_prs_truncated'])
+            && !empty($metrics['prs'])) {
+            $metrics['all_prs_total'] = count($metrics['prs']);
+            $metrics['all_prs_truncated'] = array_map(function ($p) {
+                return [
+                    'id' => $p['id'] ?? null,
+                    'number' => $p['pr_number'] ?? null,
+                    'title' => '',
+                    'state' => !empty($p['merged_at']) ? 'merged' : 'open',
+                    'created_at' => $p['created_at'] ?? null,
+                    'updated_at' => $p['created_at'] ?? null,
+                    'merged_at' => $p['merged_at'] ?? null,
+                    'user' => ['login' => $p['user_login'] ?? ''],
+                    'base' => ['repo' => ['full_name' => $p['repo'] ?? '']],
+                    'data_source' => $p['data_source'] ?? null,
+                ];
+            }, array_slice($metrics['prs'], 0, 50));
+            $metrics['all_prs'] = $metrics['all_prs_truncated'];
+        }
+
+        // CR-X SI: when DB evidence is the source, the repo inventory is the
+        // App-ingested evidence scope, not the OAuth-visible repo set.
+        if (($metrics['github_data_source'] ?? null) === 'db_sync' && !empty($appEvidenceRepos)) {
+            $metrics['total_repositories'] = count($appEvidenceRepos);
+            $metrics['repositories'] = array_map(function ($name) {
+                return ['name' => $name, 'private' => null, 'fork' => false, 'language' => null];
+            }, $appEvidenceRepos);
+        }
 
         return $metrics;
         } catch (\Throwable $e) {
@@ -4894,12 +5042,16 @@ class PullRequestController extends Controller
         }
 
         $failedDeployments = $deploymentMetrics['failed_deployment_count'] ?? 0;
-        
+
+        // Deployment failure rate is computable; DORA change failure rate is
+        // not — deployment_status failure does not establish a production-
+        // impacting change failure.
         return [
             'has_data' => true,
-            'is_computable' => true,
-            'value' => $totalDeployments > 0 ? ($failedDeployments / $totalDeployments) * 100 : 0,
-            'reason' => $totalDeployments > 0 ? 'Change failure rate calculated' : 'No deployments for calculation'
+            'is_computable' => false,
+            'value' => null,
+            'deployment_failure_rate_value' => $totalDeployments > 0 ? ($failedDeployments / $totalDeployments) * 100 : null,
+            'reason' => 'deployment_status failures are delivery outcomes across all environments; DORA CFR requires production-impacting incident/remediation evidence not present in deployment records'
         ];
     }
 
@@ -5662,7 +5814,7 @@ class PullRequestController extends Controller
         return $query->where('ide_name', 'jetbrains')->count();
     }
 
-    private function fetchEnhancedGitHubData($oauthToken, $repo = null, $developerId = null, $timeFilter = 'week', $timeoutOverride = null, $demoMode = false, $teamMetrics = [])
+    private function fetchEnhancedGitHubData($oauthToken, $repo = null, $developerId = null, $timeFilter = 'week', $timeoutOverride = null, $demoMode = false, $teamMetrics = [], ?array $repoAuthority = null)
     {
         Log::info('[INTEGRITY_DEBUG] fetchEnhancedGitHubData ENTRY', [
             'oauth_token_present' => !empty($oauthToken),
@@ -5719,6 +5871,15 @@ class PullRequestController extends Controller
             try {
                 $reposResponse = $this->githubApiService->makeApiCall($oauthToken, 'user/repos?per_page=50&affiliation=owner,collaborator,organization_member');
                 if ($reposResponse && (time() - $startTime) < $timeout) {
+                    // CR-X SI: restrict OAuth-visible repos to the evidence
+                    // authority (customer allow-list + App-ingested repos) so
+                    // personal/unrelated repos never become org metrics.
+                    if (is_array($repoAuthority)) {
+                        $reposResponse = array_values(array_filter($reposResponse, function ($r) use ($repoAuthority) {
+                            return in_array($r['full_name'] ?? null, $repoAuthority, true);
+                        }));
+                        $githubFetchDebug['repos']['authority_filtered_count'] = count($reposResponse);
+                    }
                     $enhancedData['total_repositories'] = count($reposResponse);
                     $enhancedData['repositories'] = array_map(function($repo) {
                         return [
@@ -5739,7 +5900,7 @@ class PullRequestController extends Controller
             // Fetch comprehensive pull request data for engineering metrics (with timeout)
             if ((time() - $startTime) < $timeout) {
                 try {
-                    $githubMetricsResult = $this->fetchGitHubTeamMetrics($oauthToken, $repo, $developerId, $timeFilter, $timeout - (time() - $startTime), $demoMode);
+                    $githubMetricsResult = $this->fetchGitHubTeamMetrics($oauthToken, $repo, $developerId, $timeFilter, $timeout - (time() - $startTime), $demoMode, $repoAuthority);
                     // DEMO MODE: Prioritize DB operational realism over GitHub enrichment
                     $enhancedData['github_team_metrics'] = $demoMode ? $teamMetrics : ($githubMetricsResult['team_metrics'] ?? []);
                     $enhancedData['all_prs'] = $githubMetricsResult['all_prs'] ?? [];
@@ -5793,7 +5954,7 @@ class PullRequestController extends Controller
         return $enhancedData;
     }
 
-    private function fetchGitHubTeamMetrics($oauthToken, $repo = null, $developerId = null, $timeFilter = 'week', $remainingTime = null, $demoMode = false)
+    private function fetchGitHubTeamMetrics($oauthToken, $repo = null, $developerId = null, $timeFilter = 'week', $remainingTime = null, $demoMode = false, ?array $repoAuthority = null)
     {
         $teamMetrics = [];
         $allPRs = [];
@@ -5871,6 +6032,14 @@ class PullRequestController extends Controller
             // Get repositories (limit to 10 to prevent hanging - DEMO OPTIMIZATION)
             $reposResponse = $this->githubApiService->makeApiCall($oauthToken, 'user/repos?per_page=10&affiliation=owner,collaborator,organization_member');
             $reposToProcess = [];
+
+            // CR-X SI: restrict to evidence authority so OAuth-personal repos
+            // never feed org-level team metrics.
+            if (is_array($repoAuthority) && $reposResponse) {
+                $reposResponse = array_values(array_filter($reposResponse, function ($r) use ($repoAuthority) {
+                    return in_array($r['full_name'] ?? null, $repoAuthority, true);
+                }));
+            }
 
             if ($reposResponse && (time() - $startTime) < $timeout) {
                 $totalRepos = count($reposResponse);
@@ -6876,9 +7045,11 @@ class PullRequestController extends Controller
                     // Local mode: only cm_activity_sim accepted
                     if ($metaSource !== 'cm_activity_sim') continue;
                 } else {
-                    // Live mode: only real customer rows
-                    if (!in_array($metaSource, ['github_api_sync', 'db_sync'], true) &&
-                        $metaDataSource !== 'github_api_sync') continue;
+                    // Live mode: only real customer rows. GitHub App ingested
+                    // deployments carry metadata.data_source='github_app' —
+                    // the gate predates App ingestion and must accept it.
+                    if (!in_array($metaSource, ['github_api_sync', 'db_sync', 'github_app'], true) &&
+                        !in_array($metaDataSource, ['github_api_sync', 'github_app'], true)) continue;
                 }
 
                 $date = new \DateTime($dep->deployed_at, new \DateTimeZone('UTC'));
@@ -7004,8 +7175,9 @@ class PullRequestController extends Controller
             } else {
                 $totalPrQuery->whereNotIn('data_source', ['demo', 'realism_seeder', 'cm_activity_sim']);
             }
-            $totalPrs = $totalPrQuery->orderBy('created_at')->get(['created_at']);
+            $totalPrs = $totalPrQuery->orderBy('created_at')->get(['created_at', 'merged_at']);
             $totalPrByWeek = [];
+            $cohortMergedByWeek = []; // PRs created this week that have since merged
             foreach ($totalPrs as $pr) {
                 if (!$pr->created_at) continue;
                 try {
@@ -7016,6 +7188,9 @@ class PullRequestController extends Controller
                 $date->setISODate((int)$date->format('o'), (int)$date->format('W'));
                 $pk = $date->format('Y-m-d');
                 $totalPrByWeek[$pk] = ($totalPrByWeek[$pk] ?? 0) + 1;
+                if ($pr->merged_at) {
+                    $cohortMergedByWeek[$pk] = ($cohortMergedByWeek[$pk] ?? 0) + 1;
+                }
             }
 
             // --- Releases by ISO week (CR-X B4) ---
@@ -7069,6 +7244,11 @@ class PullRequestController extends Controller
                     $releaseByWeek[$pk] = ($releaseByWeek[$pk] ?? 0) + 1;
                 }
             }
+            // Release evidence is "available" only when eligible release rows
+            // actually exist in scope — an authorized-but-empty releases
+            // table under a permission-limited App is unavailable evidence,
+            // not measured-zero releases.
+            $releaseEvidenceAvailable = !empty($releaseByWeek);
 
             // --- Merge into unified weekly rows ---
             $allWeeks = array_unique(array_merge(
@@ -7078,6 +7258,32 @@ class PullRequestController extends Controller
                 array_keys($releaseByWeek)
             ));
             sort($allWeeks);
+
+            // Evidence-completeness window: App-sourced PR evidence is
+            // selected by `updated_at` within a bounded trailing window, so
+            // weeks before the window contain only long-lived PRs that
+            // happened to be updated — biased samples, not complete history.
+            $appOnlyPrEvidence = false;
+            try {
+                $appPrCount = \DB::table('pull_requests')
+                    ->where('data_source', 'github_app')
+                    ->when($repo, fn($q) => $q->where('repo_name', $repo))
+                    ->count();
+                $allPrCount = \DB::table('pull_requests')
+                    ->whereNotIn('data_source', ['demo', 'realism_seeder', 'cm_activity_sim'])
+                    ->when($repo, fn($q) => $q->where('repo_name', $repo))
+                    ->count();
+                $appOnlyPrEvidence = $allPrCount > 0 && $appPrCount === $allPrCount;
+            } catch (\Throwable $e) {
+            }
+            $evidenceWindowStart = null;
+            if ($appOnlyPrEvidence && count($allWeeks) > 0) {
+                $latestWeek = end($allWeeks);
+                $ws = strtotime($latestWeek . ' -90 days');
+                if ($ws !== false) {
+                    $evidenceWindowStart = date('Y-m-d', $ws);
+                }
+            }
 
             $series = [];
             foreach ($allWeeks as $week) {
@@ -7089,19 +7295,36 @@ class PullRequestController extends Controller
                 $failedCount = $dep['failed_deployment_count'] ?? 0;
                 $mergedPrCount = $pr['merged_pr_count'] ?? 0;
                 $totalPrCount = $totalPrByWeek[$week] ?? 0;
-                // CR-X B5: review_count, pr_review_cycles, merge_rate
+                // CR-X B5: review_count is SUM(pull_requests.review_count)
+                // for PRs MERGED this week — real submitted-review counts,
+                // but bucketed by the PR's merge week, not the review's
+                // submitted_at (per-review timestamps are not persisted).
                 $reviewCount = $reviewCountByWeek[$week] ?? 0;
-                $reopenedCount = is_array($reopenedCountByWeek) ? ($reopenedCountByWeek[$week] ?? 0) : null;
-                $prReviewCycles = $reopenedCount !== null
-                    ? $reviewCount + $reopenedCount
-                    : null;
-                $mergeRate = $totalPrCount > 0
-                    ? round(($mergedPrCount / $totalPrCount) * 100, 2)
-                    : null;
+                // pr_reopened_count is never populated (Issues events are not
+                // fetched) — emit null, never a fabricated zero or a
+                // review+0 duplicate ("review cycles").
+                $reopenedCount = null;
+                $prReviewCycles = null;
 
-                // Deploy success rate (%)
-                $deploySuccessRate = $deployCount > 0
-                    ? round(($successCount / $deployCount) * 100, 1)
+                // Same-cohort retrospective merge rate: fraction of PRs
+                // CREATED this week that have merged as of the observation
+                // cutoff (now). Numerator/denominator are one cohort, so the
+                // value can never exceed 100%. Cohorts whose week ended less
+                // than 14 days ago are flagged immature — they have not had
+                // a fair window to merge.
+                $cohortMerged = $cohortMergedByWeek[$week] ?? 0;
+                $mergeRate = $totalPrCount > 0
+                    ? round(($cohortMerged / $totalPrCount) * 100, 2)
+                    : null;
+                $weekEndTs = strtotime($week . ' +6 days');
+                $mergeRateMature = $weekEndTs !== false && $weekEndTs <= (time() - 14 * 86400);
+
+                // Deploy success rate (%): finalized outcomes only —
+                // pending/unknown deployments are counted in
+                // deployment_count but are not failures or successes.
+                $finalizedDeployCount = $successCount + $failedCount;
+                $deploySuccessRate = $finalizedDeployCount > 0
+                    ? round(($successCount / $finalizedDeployCount) * 100, 1)
                     : null;
 
                 // Median merge cycle time (hours)
@@ -7116,6 +7339,14 @@ class PullRequestController extends Controller
                         : round($vals[$mid], 1);
                 }
 
+                // Release evidence: null when unavailable (e.g. the GitHub
+                // App lacks `contents` permission) — never a fabricated
+                // flat-zero "no releases" claim. Measured-zero weeks only
+                // exist when release evidence is actually present.
+                $releaseCountForWeek = $releaseEvidenceAvailable
+                    ? ($releaseByWeek[$week] ?? 0)
+                    : null;
+
                 $series[] = [
                     'period' => $week,
                     'merged_pr_count' => $mergedPrCount,
@@ -7123,15 +7354,30 @@ class PullRequestController extends Controller
                     'deployment_count' => $deployCount,
                     'successful_deployment_count' => $successCount,
                     'failed_deployment_count' => $failedCount,
+                    'pending_deployment_count' => $deployCount - $finalizedDeployCount,
                     'deploy_success_rate' => $deploySuccessRate,
                     'median_merge_cycle_hours' => $medianMergeCycleHours,
-                    'release_count' => $releaseByWeek[$week] ?? 0,
+                    'release_count' => $releaseCountForWeek,
                     'review_count' => $reviewCount,
                     'pr_reopened_count' => $reopenedCount,
                     'pr_review_cycles' => $prReviewCycles,
                     'merge_rate' => $mergeRate,
+                    'merge_rate_mature' => $mergeRateMature,
+                    'evidence_partial' => $evidenceWindowStart !== null && $week < $evidenceWindowStart,
                     'count_authority' => 'observed_rows',
                 ];
+            }
+
+            // CR-X SI: scope of the evidence actually contributing to this
+            // series, so the UI never presents partial coverage as org-wide.
+            $evidenceRepos = [];
+            try {
+                $evidenceRepos = \DB::table('pull_requests')
+                    ->where('data_source', 'github_app')
+                    ->when($repo, fn($q) => $q->where('repo_name', $repo))
+                    ->distinct()->pluck('repo_name')->filter()->values()->all();
+            } catch (\Throwable $e) {
+                // Column may not exist on older deployments — leave empty.
             }
 
             return response()->json([
@@ -7144,6 +7390,22 @@ class PullRequestController extends Controller
                     'total_weeks' => count($series),
                     'source' => $isLocal ? 'cm_activity_sim' : 'live',
                     'attribution_authority' => $repo ? 'repo' : 'org',
+                    'evidence_repos' => $evidenceRepos,
+                    'evidence_window_start' => $evidenceWindowStart,
+                    'evidence_window_basis' => $evidenceWindowStart !== null
+                        ? 'PR evidence selected by updated_at in a trailing ~90-day sync window; weeks before evidence_window_start contain only PRs updated inside that window (partial samples, not complete history)'
+                        : null,
+                    'merge_rate_basis' => 'cohort_created_week_retrospective',
+                    'merge_rate_definition' => 'Fraction of PRs created in the week that have merged as of the observation cutoff; weeks marked merge_rate_mature=false are immature cohorts',
+                    'review_count_scope' => 'reviews_on_prs_merged_this_week',
+                    'review_count_definition' => 'Sum of submitted reviews accumulated by PRs merged in the week; bucketed by PR merge week, not review submission date (per-review timestamps not persisted)',
+                    'pr_review_cycles_availability' => 'unavailable_no_review_timeline',
+                    'pr_reopened_availability' => 'unavailable_no_issues_permission',
+                    'release_availability' => $releaseEvidenceAvailable
+                        ? 'measured'
+                        : ($appOnlyPrEvidence ? 'unavailable_github_app_no_contents' : 'unavailable'),
+                    'deployment_count_scope' => 'all_observed_outcomes_including_pending',
+                    'deploy_success_rate_denominator' => 'finalized_outcomes_only',
                 ],
             ]);
 

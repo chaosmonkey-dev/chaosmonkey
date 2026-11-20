@@ -119,6 +119,15 @@ function buildInput(rows: Record<string, unknown>[], overrides: Partial<Canonica
 
 // ── GitHub snapshot helper (live provenance) ──────────────────────────────
 
+// Windowed PR-throughput authority: weekly PR created_at buckets
+// (ISO week-start dates) — the generator requires pr_by_period evidence.
+const LIVE_PR_PERIODS = [
+  { period: '2026-08-17', total_pr_count: 7 },
+  { period: '2026-08-24', total_pr_count: 7 },
+  { period: '2026-08-31', total_pr_count: 6 },
+  { period: '2026-09-07', total_pr_count: 7 },
+]
+
 function liveGithubSnapshot(overrides: any = {}): any {
   return {
     github_provenance: {
@@ -536,7 +545,7 @@ describe('Family: review-cycle', () => {
   })
 
   it('pr-throughput FIRES with live team metrics', () => {
-    const input = buildInput([], { githubSnapshot: liveGithubSnapshot() })
+    const input = buildInput([], { githubSnapshot: liveGithubSnapshot(), prByPeriod: LIVE_PR_PERIODS })
     const out = generatePrThroughput(input)
     expect(out).not.toBeNull()
     expect(out!.id).toBe('pr-throughput')
@@ -572,7 +581,7 @@ describe('Family: review-quality (executive-small-pr-workflow-optimization)', ()
 // ============================================================================
 describe('Family: delivery-throughput (pr-throughput)', () => {
   it('FIRES (same generator as review-cycle pr-throughput)', () => {
-    const input = buildInput([], { githubSnapshot: liveGithubSnapshot() })
+    const input = buildInput([], { githubSnapshot: liveGithubSnapshot(), prByPeriod: LIVE_PR_PERIODS })
     const out = generatePrThroughput(input)
     expect(out).not.toBeNull()
     expect(out!.id).toBe('pr-throughput')

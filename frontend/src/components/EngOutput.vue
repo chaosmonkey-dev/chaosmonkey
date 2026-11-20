@@ -549,6 +549,18 @@ const githubDataSourceInfo = computed(() => {
   if (source === 'cm_activity_sim') {
     return { dataSource: 'simulated', dataSourceLabel: 'GitHub delivery' }
   }
+  // CR-X SI: label the card source to its actual evidence authority —
+  // persisted GitHub App org evidence is labeled with its repo coverage,
+  // OAuth-live metrics are labeled as account-scoped, never presented as
+  // unqualified org-wide GitHub truth.
+  const appRepos = provenance?.app_ingested_repos || []
+  const dataSource = provenance?.data_source
+  if (dataSource === 'db_sync' && appRepos.length > 0) {
+    return { dataSource: 'github', dataSourceLabel: `GitHub App · ${appRepos.length} repo${appRepos.length > 1 ? 's' : ''}` }
+  }
+  if (dataSource === 'live_api') {
+    return { dataSource: 'github', dataSourceLabel: 'GitHub (account)' }
+  }
   // Default: real GitHub evidence (db_sync or live API fetch)
   return { dataSource: 'github', dataSourceLabel: 'GitHub' }
 })

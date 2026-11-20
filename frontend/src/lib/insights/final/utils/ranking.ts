@@ -558,6 +558,40 @@ export function getTopInsights(insights: CanonicalInsight[]): CanonicalInsight[]
       }
     }
   }
+
+  // CR-X portfolio P0: Temporal prominence maturity gate.
+  // A recent-change finding drawn from fewer than 14 observed days is built
+  // on a half-split of the pilot's onboarding window — it describes adoption
+  // movement, not an established operational trend. Magnitude alone (e.g.
+  // "+259% session volume" during week-one rollout) must not earn executive
+  // Top-Insights placement. Escape hatch: a card that retains 'high'
+  // confidence after the realism pipeline's statistical review is
+  // independently supported and remains eligible. Scope: ONLY
+  // recent-change Top-Insights candidacy — findings still render in
+  // All Insights, and no other family is gated.
+  const TEMPORAL_PROMINENCE_MIN_OBSERVED_DAYS = 14;
+  for (const s of scoredForTopInsights) {
+    const i = s.insight as any;
+    if (s.insight.id.startsWith('recent-change__')
+        && typeof i.observationDays === 'number'
+        && i.observationDays < TEMPORAL_PROMINENCE_MIN_OBSERVED_DAYS
+        && i.confidence !== 'high') {
+      temporalQualitySuppressed.add(s.insight.id);
+    }
+  }
+
+  // Sparse within-workflow temporal findings must not reach Top Insights.
+  // The family emits a trend from as few as N=3 observed events per window;
+  // its own confidence model already marks both-windows-≥20 as 'high'. A
+  // medium/low-confidence version of one of these cards is an interesting
+  // observation, not an executive finding — keep it in All Insights but
+  // exclude it from Top candidacy.
+  for (const s of scoredForTopInsights) {
+    if (s.insight.id.startsWith('within-workflow-temporal-behavior__')
+        && s.insight.confidence !== 'high') {
+      temporalQualitySuppressed.add(s.insight.id);
+    }
+  }
   const scoredForTopInsightsFinal = temporalQualitySuppressed.size > 0
     ? scoredForTopInsights.filter(s => !temporalQualitySuppressed.has(s.insight.id))
     : scoredForTopInsights;

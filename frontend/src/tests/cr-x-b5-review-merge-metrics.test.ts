@@ -75,7 +75,7 @@ describe('CR-X B5: Review Count, Review Cycles, Merge Rate', () => {
       'utf-8'
     )
     expect(pbtSource).toContain('value="review_count"')
-    expect(pbtSource).toContain('Reviews / Week')
+    expect(pbtSource).toContain('Reviews on PRs Merged / Week')
     expect(pbtSource).toContain('value="pr_review_cycles"')
     expect(pbtSource).toContain('Review Cycles / Week')
     expect(pbtSource).toContain('value="merge_rate"')

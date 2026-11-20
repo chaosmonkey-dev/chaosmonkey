@@ -500,6 +500,13 @@ export function generateChangeFailureRateSpikeByIDE(input: CanonicalInsightInput
   {
     // Compute from live GitHub deployment metrics data
     const dm = githubSnapshot.deployment_metrics;
+    // DORA CFR is emitted as null when deployment_status alone cannot
+    // establish production-impacting change failures — suppress rather
+    // than present the all-environment deployment failure rate as CFR.
+    if (dm.change_failure_rate == null) {
+      piDebugLog('[GENERATOR_CHANGE_FAILURE_RATE][CFR_UNAVAILABLE]', { reason: dm.change_failure_rate_unavailable });
+      return null;
+    }
     successDeployments = dm.success_deployment_count || 0;
     failedDeployments = dm.failed_deployment_count || 0;
     totalDeployments = successDeployments + failedDeployments;
@@ -775,7 +782,9 @@ export function generateDeploymentReliabilityPressure(input: CanonicalInsightInp
     const failedCount = dm.failed_deployment_count || 0;
     const successCount = dm.success_deployment_count || 0;
     deploymentSuccessRate = totalDeployments > 0 ? (successCount / totalDeployments) * 100 : 0;
-    avgFailureRate = dm.change_failure_rate || 0;
+    // All-environment deployment failure rate (NOT DORA CFR — CFR is
+    // emitted separately and is null without incident evidence).
+    avgFailureRate = dm.deployment_failure_rate ?? dm.change_failure_rate ?? 0;
     failedDeployments = failedCount;
 
     // Calculate frequency improvement
@@ -856,8 +865,8 @@ export function generateDeploymentReliabilityPressure(input: CanonicalInsightInp
     if (failureRates.length >= 3) {
       const minCFR = Math.min(...failureRates);
       const maxCFR = Math.max(...failureRates);
-      cfrRange = `CFR ranged from ${formatPct(minCFR)} to ${formatPct(maxCFR)} over the last ${failureRates.length} deployment weeks`;
-      trendTitle = `Change failure rate stayed elevated across recent deployment weeks`;
+      cfrRange = `Deployment failure rate ranged from ${formatPct(minCFR)} to ${formatPct(maxCFR)} over the last ${failureRates.length} deployment weeks (all environments)`;
+      trendTitle = `Deployment failure rate stayed elevated across recent deployment weeks`;
     }
   }
 

@@ -460,6 +460,46 @@ function applyStoryKeySuppression(
   for (const [storyKey, members] of storyGroups) {
     if (members.length < 2) continue; // No parent/child relationship
 
+    // Same-measurement duplicate groups: 'measurement:' storyKeys mark
+    // candidates from different generator families that describe the SAME
+    // underlying statistic for the SAME scope (e.g. two session-duration
+    // distribution cards for one workflow). These are redundant
+    // presentations of one observation — keep the strongest and
+    // portfolio-suppress the rest (never diagnostics; evidence preserved).
+    // Other storyKey groups (e.g. 'workflow-mix:') keep their existing
+    // synthesis-only semantics and are unaffected.
+    if (storyKey.startsWith('measurement:')) {
+      const familyPreference = (m: CanonicalInsight): number => {
+        // Within the same measured distribution, prefer the family with the
+        // stronger evidence floor and richer operational recommendation.
+        const base = m.id.split('__')[0];
+        if (base === 'workflow-session-distribution') return 0;
+        if (base === 'within-workflow-session-duration-profile') return 1;
+        return 2;
+      };
+      const ranked = [...members].sort((a, b) => {
+        const pa = familyPreference(a) - familyPreference(b);
+        if (pa !== 0) return pa;
+        const sa = getMaterialityScore(a) - getMaterialityScore(b);
+        if (sa !== 0) return -sa;
+        return (b.n ?? 0) - (a.n ?? 0);
+      });
+      const keep = ranked[0];
+      for (const m of ranked.slice(1)) {
+        if (alreadySuppressed.has(m.id) || m.portfolioSuppressed) continue;
+        m.portfolioSuppressed = true;
+        m.portfolioSuppressedReason = `measurement-duplicate: ${keep.id} presents the same measured distribution for this scope`;
+        m.lifecycleClass = 'suppress';
+        newlySuppressed.push(m.id);
+        piDebugLog('[WS2_CONSOLIDATION][MEASUREMENT_DUPLICATE_SUPPRESS]', {
+          storyKey,
+          suppressedId: m.id,
+          retainedId: keep.id,
+        });
+      }
+      continue;
+    }
+
     // Find the synthesis (parent) finding — it has presentationKind
     // 'executive_synthesis' or id containing 'synthesis'.
     const synthesis = members.find(m =>
