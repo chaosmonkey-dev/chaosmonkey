@@ -503,23 +503,26 @@ describe('PI Semantic Authority Production Tests', () => {
 
   it('G4. ai-adoption-velocity with temporal cohort produces genuine temporal finding (not monitor_only)', () => {
     const sessions = mkMultiToolSessions({ cursor: 30, vscode: 25 })
-    // Assign sessions to 2 explicit calendar months (previous + current)
-    // with ≥20 sessions each. Using explicit UTC dates avoids timezone-
-    // dependent month-boundary issues that caused the old 14-day spread
-    // to put only 19 sessions in the earlier month.
+    // Assign sessions to 2 explicit COMPLETE calendar months (two and one
+    // months back) with ≥20 sessions each. The in-progress month can never
+    // serve as a period endpoint (partial-period rule), so the current
+    // month must not be used here. Explicit UTC dates avoid timezone-
+    // dependent month-boundary issues.
     const now = new Date()
     const year = now.getUTCFullYear()
     const month = now.getUTCMonth()
     const prevMonth = month === 0 ? 11 : month - 1
     const prevYear = month === 0 ? year - 1 : year
+    const prevPrevMonth = prevMonth === 0 ? 11 : prevMonth - 1
+    const prevPrevYear = prevMonth === 0 ? prevYear - 1 : prevYear
     sessions.forEach((s, i) => {
       if (i < 28) {
         const day = (i % 28) + 1
-        s.timestamp = new Date(Date.UTC(prevYear, prevMonth, day, 12, 0, 0)).toISOString()
+        s.timestamp = new Date(Date.UTC(prevPrevYear, prevPrevMonth, day, 12, 0, 0)).toISOString()
         s.start_time = s.timestamp
       } else {
         const day = ((i - 28) % 27) + 1
-        s.timestamp = new Date(Date.UTC(year, month, day, 12, 0, 0)).toISOString()
+        s.timestamp = new Date(Date.UTC(prevYear, prevMonth, day, 12, 0, 0)).toISOString()
         s.start_time = s.timestamp
       }
     })
@@ -622,10 +625,13 @@ describe('PI Semantic Authority Production Tests', () => {
   // ── Batch A: Comparison authority ──────────────────────────────────────────
 
   it('A1. ai-adoption-rate-by-ide adapted leader and baseline match generator highest/lowest >=25-session workflows', () => {
-    // cursor: 100% adoption (all aiBurst > 0), vscode: 80% adoption → cursor is leader, vscode is baseline
+    // cursor: 100% adoption (all aiBurst > 0), vscode: 48% adoption → cursor is leader, vscode is baseline.
+    // NOTE: lowest adoption must stay below HEALTHY_COVERAGE_THRESHOLD (70%) —
+    // healthy coverage across all primary workflows is correctly suppressed
+    // (not a decision finding), so a >=70% lowest rate returns null by design.
     const cursorSessions = mkSessions(30, { tool: 'cursor', aiBurstCount: 3 })
     const vscodeSessions = mkSessions(25, { tool: 'vscode' })
-    vscodeSessions.forEach((s, i) => { if (i % 5 === 0) { s.session_ai_burst_count = 0; s.session_has_ai_activity = false } })
+    vscodeSessions.forEach((s, i) => { if (i % 2 === 0) { s.session_ai_burst_count = 0; s.session_has_ai_activity = false } })
     const sessions = [...cursorSessions, ...vscodeSessions]
     const adoption = generateAIAdoptionRateByIDE(ti(sessions, eligGh()))
     expect(adoption).not.toBeNull()
@@ -650,7 +656,8 @@ describe('PI Semantic Authority Production Tests', () => {
   it('A2. ai-adoption-rate-by-ide title, comparisonAuthority, and gap use the same pair', () => {
     const cursorSessions = mkSessions(30, { tool: 'cursor', aiBurstCount: 3 })
     const vscodeSessions = mkSessions(25, { tool: 'vscode' })
-    vscodeSessions.forEach((s, i) => { if (i % 5 === 0) { s.session_ai_burst_count = 0; s.session_has_ai_activity = false } })
+    // 48% AI — below the 70% healthy-coverage suppression threshold (see A1).
+    vscodeSessions.forEach((s, i) => { if (i % 2 === 0) { s.session_ai_burst_count = 0; s.session_has_ai_activity = false } })
     const sessions = [...cursorSessions, ...vscodeSessions]
     const adoption = generateAIAdoptionRateByIDE(ti(sessions, eligGh()))
     expect(adoption).not.toBeNull()
@@ -781,7 +788,10 @@ describe('PI Semantic Authority Production Tests', () => {
   // ── Batch C: Final-composition tests (C1-C5) ──────────────────────────────
 
   describe('Batch C — Final decision-card composition', () => {
-    // Browser-shaped data: Claude Code 100%, Devin 90.6%, VS Code 85.2%, Cursor 82.5%, Copilot 100% low-sample
+    // Browser-shaped data: Claude Code 100%, Devin 90.6%, VS Code 85.2%, Cursor 65%, Copilot 100% low-sample
+    // Cursor sits below the 70% healthy-coverage suppression threshold —
+    // at >=70% lowest adoption the generator correctly returns null
+    // (healthy coverage is not a decision finding).
     // Build sessions with realistic adoption rates by mixing AI and non-AI sessions
     function mkAdoptionSessions(tool: string, total: number, adoptionPct: number): any[] {
       const aiCount = Math.round(total * adoptionPct / 100)
@@ -796,7 +806,7 @@ describe('PI Semantic Authority Production Tests', () => {
       ...mkAdoptionSessions('claude-code', 54, 100),    // 100% adoption
       ...mkAdoptionSessions('devin', 973, 90.6),        // 90.6% adoption
       ...mkAdoptionSessions('vscode', 548, 85.2),       // 85.2% adoption
-      ...mkAdoptionSessions('cursor', 274, 82.5),       // 82.5% adoption
+      ...mkAdoptionSessions('cursor', 274, 65),         // 65% adoption (below suppression threshold)
       ...mkAdoptionSessions('github-copilot', 6, 100),  // 100% but low sample
     ]
 
@@ -828,9 +838,10 @@ describe('PI Semantic Authority Production Tests', () => {
       expect(ca.runnerUp?.workflowId).toBe('cursor')
     })
 
-    it('C2 — displayed gap is 8.1 percentage points (Level-B gate: devin vs cursor)', () => {
-      // CR-X 1C.1: Gap is now 90.6 - 82.5 = 8.1pp (within editor family),
-      // not 17.5pp (which mixed Claude Code with editor workflows).
+    it('C2 — displayed gap is devin-vs-cursor within-family delta (Level-B gate)', () => {
+      // CR-X 1C.1: Gap is devin - cursor (within editor family), not
+      // devin - claude-code (which would mix editor workflows with an
+      // agent_authored_known surface).
       const insight = generateAIAdoptionRateByIDE(ti(browserShapedSessions, eligGh()))
       expect(insight).not.toBeNull()
       if (!insight) return
@@ -841,7 +852,7 @@ describe('PI Semantic Authority Production Tests', () => {
       if (!ca || !ca.leader || !ca.runnerUp) return
 
       const gap = Math.abs(ca.leader.value - ca.runnerUp.value)
-      expect(gap).toBeCloseTo(8.1, 0)
+      expect(gap).toBeCloseTo(25.6, 0) // 90.6 - 65.0 fixture delta
     })
 
     it('C3 — resolveDecisionCardComparisonPair puts Devin/Cursor first, VS Code secondary (Level-B gate)', () => {
@@ -928,7 +939,9 @@ describe('PI Semantic Authority Production Tests', () => {
       ...mkAdoptionSessions('claude-code', 54, 100),
       ...mkAdoptionSessions('devin', 973, 90.6),
       ...mkAdoptionSessions('vscode', 548, 85.2),
-      ...mkAdoptionSessions('cursor', 274, 82.5),
+      // 65% — below the 70% healthy-coverage suppression threshold so the
+      // finding fires; the Level-B pair semantics under test are unchanged.
+      ...mkAdoptionSessions('cursor', 274, 65),
       ...mkAdoptionSessions('github-copilot', 6, 100),
     ]
 
@@ -1021,7 +1034,7 @@ describe('PI Semantic Authority Production Tests', () => {
     })
 
     // D7: ai-adoption-rate selected pair correctness and UI behavior
-    it('D7 — adoption-rate preserves Devin/Cursor pair with 8.1-point gap (Level-B gate excludes Claude Code)', () => {
+    it('D7 — adoption-rate preserves Devin/Cursor pair with within-family gap (Level-B gate excludes Claude Code)', () => {
       // CR-X 1C.1: Claude Code excluded from cross-surface AI-signal comparison.
       // Comparison is within editor_activity_heuristic family: devin vs cursor.
       const insight = generateAIAdoptionRateByIDE(ti(browserShapedSessions, eligGh()))
@@ -1036,7 +1049,7 @@ describe('PI Semantic Authority Production Tests', () => {
       expect(ca.leader.workflowId).toBe('devin')
       expect(ca.runnerUp.workflowId).toBe('cursor')
       const gap = Math.abs(ca.leader.value - ca.runnerUp.value)
-      expect(gap).toBeCloseTo(8.1, 0)
+      expect(gap).toBeCloseTo(25.6, 0) // 90.6 - 65.0 fixture delta
 
       // Must not be diagnostic — it's an actionable comparison
       expect(adapted.isDiagnostic).toBe(false)
