@@ -33,9 +33,11 @@ docker exec -it chaosmonkey \
   php /var/www/backend/artisan chaosmonkey:create-admin you@example.com
 ```
 
-From there: create an invite, issue a connect code, and install a client
-(see [integrations](#supported-integrations)). Source builds and Docker
-Compose are documented in [docs/installation.md](docs/installation.md).
+From there: create an invite, issue a connect code, and install a client —
+the full org walkthrough is [docs/onboarding.md](docs/onboarding.md), and
+per-tool setup is [docs/integrations.md](docs/integrations.md). Source builds
+and Docker Compose are documented in
+[docs/installation.md](docs/installation.md).
 
 All application data lives in the `/data` volume — nothing leaves your
 infrastructure. GitHub integration is optional; telemetry works without it.
