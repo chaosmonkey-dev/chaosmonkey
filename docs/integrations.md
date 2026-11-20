@@ -90,7 +90,9 @@ Per-user consent; tokens stay in your instance.
 
 ## GitHub App (optional — org delivery evidence)
 
-For organization-level delivery evidence without per-user OAuth:
+For organization-level delivery evidence without per-user OAuth. The App is
+customer-owned: create **your own** GitHub App in your GitHub organization —
+never reuse another install's app or private key.
 
 | Variable | Purpose |
 |---|---|
@@ -100,7 +102,73 @@ For organization-level delivery evidence without per-user OAuth:
 | `GITHUB_APP_WEBHOOK_SECRET` | Webhook signature secret |
 
 Webhooks arrive at `POST /api/github/app/webhook` (signature-verified).
-Create the app at GitHub → Developer Settings → GitHub Apps.
+
+### Create the App
+
+GitHub → your organization → Developer Settings → GitHub Apps → New.
+
+- **Webhook URL:** `https://<your-host>/api/github/app/webhook` (requires the
+  public HTTPS hostname — GitHub will not deliver to plain HTTP)
+- **Webhook secret:** generate a strong random secret → `GITHUB_APP_WEBHOOK_SECRET`
+
+Permissions and what each unlocks:
+
+| Permission | Required for |
+|---|---|
+| Metadata (read) | Always — installation identity |
+| Pull requests (read) | PR evidence + merge/cycle metrics |
+| Contents (read) | Release evidence (`release_count`; without it releases report *unavailable*, not zero) |
+| Deployments (read) | Deployment history + failure-rate metrics |
+| Issues (read) | Per-review timeline / reopen-cycle evidence (optional — without it those fields report *unavailable*) |
+
+**Subscribe to events:** pull request, pull request review, deployment,
+release. After creating, **install** the app on the organization and record
+the installation ID → `GITHUB_APP_INSTALLATION_ID`.
+
+### Verify configuration
+
+```bash
+docker exec chaosmonkey php /var/www/backend/artisan github:app-sync --dry-run
+```
+
+Inventories the installation's repositories via the installation token —
+no writes, no ingestion. `GITHUB_APP_INSTALLATION_ID not configured` means the
+env vars are not set; a 401/404 means the ID or key is wrong.
+
+### Initial historical sync
+
+Webhooks only cover events *after* the app is installed. Backfill history
+once:
+
+```bash
+docker exec chaosmonkey php /var/www/backend/artisan github:app-sync \
+  --all --days=365 --enrich-reviews --include-deployments --include-releases
+```
+
+Idempotent upserts — safe to interrupt and re-run; existing rows are updated,
+never duplicated. Useful options: `--repo=`/`--repos=` subset,
+`--from-repo=` resume, `--days=` window, `--dry-run` inventory.
+
+### Ongoing synchronization + missed-event recovery
+
+New events arrive by webhook in real time. The App can also recover any gap —
+missed deliveries while the endpoint was down, events before the webhook was
+configured — because `github:app-sync` re-fetches from the API rather than
+replaying deliveries. Run it periodically for gap insurance, e.g. host cron:
+
+```cron
+*/30 * * * * docker exec chaosmonkey php /var/www/backend/artisan github:app-sync --days=2 --enrich-reviews
+```
+
+### Diagnostics
+
+| Symptom | Check |
+|---|---|
+| No PR/deploy rows appear | `--dry-run` inventories repos? → if not, App creds/installation wrong |
+| Webhook deliveries show 4xx in GitHub's delivery log | `GITHUB_APP_WEBHOOK_SECRET` mismatch |
+| Reviews count stays 0 | `--enrich-reviews` has not run; `review_count` counts submitted reviews only |
+| Releases show "unavailable" | App lacks Contents (read) — expected `null`, not an error |
+| Sync is slow | Normal on first backfill; use `--days=`, `--repo=`, `--sleep-ms=` to pace API usage |
 
 ## Verification status
 

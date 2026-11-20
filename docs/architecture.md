@@ -66,7 +66,9 @@ what is deliberately not collected are specified in
   and enroll through the connect-code flow.
 - **New metrics**: dashboard metrics are computed in
   `frontend/src/lib/insights/final/` (the Performance Insights engine) from
-  canonical session data served by the backend.
+  canonical session data served by the backend. Extension guides:
+  [extending/performance-insights.md](extending/performance-insights.md) and
+  [extending/productivity-by-tool.md](extending/productivity-by-tool.md).
 - **Storage**: SQLite by default; `DB_*` env vars allow MySQL for larger
   installs (migrations are driver-aware).
 
