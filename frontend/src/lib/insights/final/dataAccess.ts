@@ -260,13 +260,29 @@ export interface SessionFetchTimeRange {
   cohortId?: string
 }
 
-// Cache key includes time range + cohort so different scopes don't share cache
+// Cache key includes time range + cohort + tenant so different scopes
+// and different users never share cache
 let _sessionPrimitivesCacheKey: string = ''
 
+/**
+ * Non-reversible fingerprint of the current API token.
+ * Included in the session-primitives cache key so a login/org switch in
+ * the same browser session cannot be served another tenant's rows.
+ * Hash only — no token material is stored or logged.
+ */
+function _tenantFingerprint(): string {
+  try {
+    const t = (typeof localStorage !== 'undefined' ? localStorage.getItem('api_token') : '') || ''
+    let h = 0
+    for (let i = 0; i < t.length; i++) h = ((h << 5) - h + t.charCodeAt(i)) | 0
+    return h.toString(36)
+  } catch { return '' }
+}
+
 export async function fetchSessionPrimitives(timeRange?: SessionFetchTimeRange): Promise<any[]> {
-  const cacheKey = timeRange
+  const cacheKey = (timeRange
     ? `${timeRange.from || ''}|${timeRange.to || ''}|${timeRange.cohortId || ''}`
-    : 'all'
+    : 'all') + `|${_tenantFingerprint()}`
 
   // 1. In-flight dedupe (concurrent calls with same range share the same Promise)
   if (_sessionPrimitivesPromise && _sessionPrimitivesCacheKey === cacheKey) {

@@ -28,6 +28,14 @@ function liveInput(overrides: any = {}): CanonicalInsightInput {
   return {
     sessionRows: [],
     githubByPeriod: [{ period: '2026-W01' }, { period: '2026-W02' }, { period: '2026-W03' }, { period: '2026-W04' }],
+    // Windowed PR-throughput authority: weekly PR created_at buckets.
+    // Sum = 40 to match github_team_metrics.total_prs below.
+    prByPeriod: [
+      { period: '2026-08-17', total_pr_count: 10 },
+      { period: '2026-08-24', total_pr_count: 10 },
+      { period: '2026-08-31', total_pr_count: 10 },
+      { period: '2026-09-07', total_pr_count: 10 },
+    ],
     githubSnapshot: {
       github_provenance: {
         source: 'github_api',

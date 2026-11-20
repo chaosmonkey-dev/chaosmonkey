@@ -695,7 +695,15 @@ class GitHubOAuthController extends Controller
             $engUser = $this->getOrgEngineeringUser($orgId);
             if ($engUser) {
                 $engToken = $this->getOrgEngineeringToken($orgId);
-                $repoAuthority = $this->resolveCustomerRepoAuthority($engToken, $engUser, $orgId);
+                // Repo-authority resolution makes synchronous GitHub calls
+                // (~5s on restricted orgs). Cache briefly keyed on the token
+                // identity so a token change invalidates immediately; TTL
+                // bounds staleness without fabricating connection state.
+                $repoAuthority = \Cache::remember(
+                    'repo_authority_' . $orgId . '_' . substr(md5((string) $engToken), 0, 12),
+                    now()->addMinutes(5),
+                    fn() => $this->resolveCustomerRepoAuthority($engToken, $engUser, $orgId)
+                );
                 return response()->json([
                     'oauth_authenticated' => true,
                     'user' => $engUser,

@@ -91,10 +91,10 @@
           <option value="deployment_count">Deployments / Week</option>
           <option value="deploy_success_rate">Deploy Success Rate (%)</option>
           <option value="median_merge_cycle_hours">Merge Cycle Time (hrs)</option>
-          <option value="release_count">Releases / Week</option>
-          <option value="review_count">Reviews / Week</option>
-          <option value="pr_review_cycles">Review Cycles / Week</option>
-          <option value="merge_rate">Merge Rate (%)</option>
+          <option value="release_count" :disabled="releasesUnavailable" :title="releasesUnavailable ? 'Release evidence unavailable — GitHub App lacks contents permission' : ''">Releases / Week{{ releasesUnavailable ? ' (unavailable)' : '' }}</option>
+          <option value="review_count" title="Submitted reviews accumulated by PRs merged each week (bucketed by merge week, not review submission date)">Reviews on PRs Merged / Week</option>
+          <option value="pr_review_cycles" disabled title="Review cycles unavailable — per-review timeline evidence is not collected">Review Cycles / Week (unavailable)</option>
+          <option value="merge_rate" title="Fraction of PRs created in the week that have since merged (same-cohort retrospective rate)">Merge Rate (%) — created-week cohort</option>
         </optgroup>
         <optgroup label="AI Output">
           <option value="ai_suggestions_accepted">AI Activity / Session</option>
@@ -623,6 +623,10 @@
           <span v-if="deliveryMetricSuppressed">Delivery metrics are not available when a developer is filtered. Delivery evidence is org-level and cannot be attributed to individual developers.</span>
           <span v-else>Delivery evidence is {{ deliveryAttributionAuthority === 'repo' ? 'repo-level' : 'org-level' }} — not attributed to individual workflows. Workflow comparison is disabled.</span>
         </div>
+        <div v-if="isDeliveryMetric && evidenceWindowNote" class="v3-ts-delivery-notice">
+          <i class="bi bi-info-circle"></i>
+          <span>{{ evidenceWindowNote }}</span>
+        </div>
 
 
 
@@ -941,7 +945,7 @@ const isDeveloperFiltered = computed(() => {
 
 // CR-X: The backend's LocalDeveloperResolver is the sole authority for
 // logical developer identity expansion (e.g. local-developer →
-// [local-developer, 4, 41001234, invite:42]). The /api/developers endpoint
+// [local-developer, 4, 18269556, invite:42]). The /api/developers endpoint
 // exposes the resolved raw identity set via `raw_identities` on each
 // developer entry. This computed consumes that authoritative set so the
 // filtered-cost layer matches the same logical developer scope as the
@@ -1171,8 +1175,8 @@ const filteredRepoEconomics = computed(() => {
 
   // Scoped rows: filter authoritative sessions to the selected repo.
   // CR-X Gate A fix: selectedRepo.value is a normalized canonical ID
-  // (e.g. "org/repo") but session rows have raw URLs
-  // (e.g. "https://github.com/org/repo").
+  // (e.g. "mattmcclintock/angrymonkey") but session rows have raw URLs
+  // (e.g. "https://github.com/mattmcclintock/angrymonkey").
   // Normalize the session row's repo URL before comparing.
   const scopedRows = props.authoritativeSessions.filter((s: any) => {
     const rawRepo = s.git_repo_url || s.repository || s.repo
@@ -2218,7 +2222,7 @@ const fetchRepos = async () => {
     // Merge both sources, normalize, and deduplicate
     const allRepos = [...telemetryRepos, ...githubRepos]
     // Exclude identities proven operator-only (all sessions credited to
-    // configured operator enrollments).
+    // known operator enrollments, e.g. mattmcclintock/angrymonkey on org 2).
     // Display-layer only — raw telemetry is preserved. Ambiguous or
     // unresolved identities are retained.
     availableRepos.value = normalizeRepoList(allRepos)
@@ -2458,7 +2462,28 @@ const deliverySeriesLabel = computed(() => {
     const repoLabel = availableRepos.value.find(r => r.id === selectedRepo.value)?.label || repoDisplayLabel(selectedRepo.value)
     return `${repoLabel} delivery`
   }
+  // CR-X SI: org-level delivery evidence is scoped to the repos actually
+  // ingested — never presented as coverage of the whole organization.
+  const n = deliveryEvidenceRepos.value?.length || 0
+  if (n > 0) return `GitHub evidence · ${n} repo${n > 1 ? 's' : ''}`
   return 'Org delivery'
+})
+
+// Release evidence unavailable (e.g. GitHub App lacks `contents`
+// permission) — the selector option is disabled rather than rendering a
+// false flat-zero series.
+const releasesUnavailable = computed(() =>
+  !!deliveryMeta.value?.release_availability &&
+  deliveryMeta.value.release_availability !== 'measured'
+)
+
+// Weeks before the evidence-complete window contain only long-lived PRs
+// updated inside the sync window — disclosed, not silently presented as
+// complete history.
+const evidenceWindowNote = computed(() => {
+  const start = deliveryMeta.value?.evidence_window_start
+  if (!start) return null
+  return `Weeks before ${start} include only PRs updated inside the ~90-day evidence window (partial samples, not complete history).`
 })
 
 // CR-X C: Delivery provenance label — must not visually resemble connected GitHub
@@ -2586,7 +2611,7 @@ const productivityQuery = computed(() => {
 })
 
 // Use time series composable with the constructed query (same as Classic line 693)
-const { data: timeSeriesData, isLoading: timeSeriesLoading, latestObservedAt, canonicalMetadata, error: timeSeriesError, deliverySeries, deliveryAttributionAuthority, deliverySource, deliveryError } = useTimeSeries(productivityQuery, toRef(props, 'isActive'))
+const { data: timeSeriesData, isLoading: timeSeriesLoading, latestObservedAt, canonicalMetadata, error: timeSeriesError, deliverySeries, deliveryAttributionAuthority, deliverySource, deliveryError, deliveryEvidenceRepos, deliveryMeta } = useTimeSeries(productivityQuery, toRef(props, 'isActive'))
 
 // Clear stale time series data immediately when developer filter changes
 // to prevent showing previous developer's data during the debounced fetch
@@ -4741,7 +4766,7 @@ const selectedMetricLabel = computed(() => {
     'deploy_success_rate': 'Deploy Success Rate (%)',
     'median_merge_cycle_hours': 'Merge Cycle Time (hrs)',
     'release_count': 'Releases / Week',
-    'review_count': 'Reviews / Week',
+    'review_count': 'Reviews on PRs Merged / Week',
     'pr_review_cycles': 'Review Cycles / Week',
     'merge_rate': 'Merge Rate (%)'
   }

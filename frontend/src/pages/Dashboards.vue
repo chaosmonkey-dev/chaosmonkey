@@ -550,6 +550,7 @@ import NavUserAvatar from '../components/NavUserAvatar.vue'
 import { usePreferencesStore } from '../stores/preferences'
 import { error as logError } from '../utils/logger'
 import api, { authenticatedFetch, API_URL } from '../config/api'
+import { getGithubOauthStatus } from '../lib/githubOauthStatus'
 import { resolveGithubEvidenceState } from '../lib/githubEvidenceState'
 import PerformanceInsightsWidget from '../components/PerformanceInsightsWidget.vue'
 import InsightChips from '../components/InsightChips.vue'
@@ -1675,9 +1676,9 @@ const githubAppInstalled = ref(false)
 
 async function refreshGithubOauthStatus() {
   try {
-    const response = await fetch(`${API_URL}/github/oauth/status`)
-    if (response.ok) {
-      const data = await response.json()
+    const status = await getGithubOauthStatus()
+    if (status.ok && status.data) {
+      const data = status.data
       githubOauthPurpose.value = data.token_purpose ?? null
       githubAppInstalled.value = data.github_app_installed === true
       githubOauthStatusLoaded.value = true

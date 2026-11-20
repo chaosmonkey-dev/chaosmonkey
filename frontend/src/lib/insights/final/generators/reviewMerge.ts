@@ -1574,17 +1574,47 @@ export function generatePrThroughput(input: CanonicalInsightInput): CanonicalIns
   }
 
   const attribution = getDeliveryAttribution(input.sessionRows || [], githubSnapshot, input._engineCache);
-  const githubByPeriod = input.githubByPeriod || [];
-  const weeks = githubByPeriod.length > 0 ? githubByPeriod.length : (totalPRs > 100 ? 13 : 4);
-  const throughput = totalPRs / weeks;
+
+  // Numerator and denominator must share one consistent window. prByPeriod =
+  // weekly ISO buckets of PR created_at. Long-lived PRs (created before the
+  // sync eligibility window but updated inside it) legitimately appear in old
+  // buckets, so the full bucket span is NOT a uniform-sampling window: PRs
+  // created pre-window are a biased subset. The trailing ~13-week window is
+  // creation-complete (every PR created inside it was also updated inside it,
+  // hence captured), so numerator = PRs created in that window and
+  // denominator = that window's calendar weeks.
+  const prByPeriod: any[] = input.prByPeriod || [];
+  const prPeriods = prByPeriod.filter(p => typeof p?.total_pr_count === 'number' && p.total_pr_count > 0);
+  if (prPeriods.length === 0) {
+    piDebugLog('[GENERATOR_PR_THROUGHPUT][NO_PR_PERIODS]', { totalPRs });
+    return null;
+  }
+  const WEEK_MS = 7 * 86400000;
+  const maxPeriod = new Date(prPeriods[prPeriods.length - 1].period + 'T00:00:00Z').getTime();
+  const minPeriod = new Date(prPeriods[0].period + 'T00:00:00Z').getTime();
+  // Trailing creation-complete window: 90 days back from the newest bucket,
+  // clamped to the earliest observed bucket for shorter histories.
+  const windowStart = Math.max(maxPeriod - 90 * 86400000, minPeriod);
+  const inWindow = prPeriods.filter(p => new Date(p.period + 'T00:00:00Z').getTime() >= windowStart);
+  const windowPrs = inWindow.reduce((sum, p) => sum + p.total_pr_count, 0);
+  if (windowPrs <= 0) {
+    piDebugLog('[GENERATOR_PR_THROUGHPUT][NO_WINDOW_PRS]', { totalPRs });
+    return null;
+  }
+  // Denominator = calendar weeks covered by the window, inclusive of the
+  // newest bucket's own week. Empty weeks inside the window count correctly
+  // as zero-creation weeks.
+  const weeks = Math.max(1, Math.round((maxPeriod + WEEK_MS - windowStart) / WEEK_MS));
+  const windowLabel = `${new Date(windowStart).toISOString().slice(0, 10)} → ${prPeriods[prPeriods.length - 1].period}`;
+  const throughput = windowPrs / weeks;
   const baseline = 5;
   const delta = throughput - baseline;
   const deltaPct = baseline > 0 ? ((throughput - baseline) / baseline) * 100 : 0;
-  const confidence: ConfidenceLevel = totalPRs >= 50 ? 'high' : totalPRs >= 20 ? 'medium' : 'low';
+  const confidence: ConfidenceLevel = windowPrs >= 50 ? 'high' : windowPrs >= 20 ? 'medium' : 'low';
 
   const insight: CanonicalInsight = {
     id: registryEntry.id,
-    title: `${formatFrequency(throughput)} PR throughput across ${totalPRs} PRs`,
+    title: `${formatFrequency(throughput)} PR throughput across ${windowPrs} PRs`,
     cicdStage: registryEntry.stage,
     canonicalPriority: registryEntry.canonicalPriority,
     renderOrder: registryEntry.renderOrder,
@@ -1597,31 +1627,31 @@ export function generatePrThroughput(input: CanonicalInsightInput): CanonicalIns
     baseline,
     delta,
     deltaPct,
-    rightMetric: `${totalPRs} PRs`,
+    rightMetric: `${windowPrs} PRs`,
     rightMetricLabel: 'PR Volume',
     metricValue: throughput,
     displayValue: formatFrequency(throughput),
     displayUnit: 'PRs/week',
-    metricDefinition: 'Number of PRs opened per week over the observed delivery window.',
+    metricDefinition: 'Number of PRs created per week over the trailing creation-complete window (~13 weeks, or the full observed span when shorter). Numerator and denominator share the same PR created_at window.',
     polarity: 'higher_is_better',
-    operationalBreadcrumbs: [`${totalPRs} PRs`, `${weeks} weeks`, attribution.provenanceLabel],
+    operationalBreadcrumbs: [`${windowPrs} PRs`, `${weeks} created-weeks`, `${totalPRs} PRs synced total`, attribution.provenanceLabel],
     confidence,
     coveragePct: 100,
-    n: totalPRs,
+    n: windowPrs,
     hasData: true,
     dataDomain: 'github_delivery',
     sourceLabel: 'GitHub delivery',
     sampleUnit: 'PRs',
-    sampleLabel: `${totalPRs} PRs over ${weeks} weeks`,
-    description: `PR throughput is ${formatFrequency(throughput)} (${totalPRs} PRs over ${weeks} weeks), ${deltaPct > 0 ? formatDelta(deltaPct) + ' above' : formatDelta(Math.abs(deltaPct)) + ' below'} the ${formatFrequency(baseline)} baseline. ${attribution.provenanceLabel}`,
+    sampleLabel: `${windowPrs} PRs created over ${weeks} weeks (${windowLabel})`,
+    description: `PR throughput is ${formatFrequency(throughput)} (${windowPrs} PRs created over ${weeks} weeks, ${windowLabel}), ${deltaPct > 0 ? formatDelta(deltaPct) + ' above' : formatDelta(Math.abs(deltaPct)) + ' below'} the ${formatFrequency(baseline)} baseline. ${attribution.provenanceLabel}`,
     whatChanged: `PR throughput: ${formatFrequency(throughput)} vs ${formatFrequency(baseline)} baseline (${formatDelta(deltaPct)} ${deltaPct > 0 ? 'above' : 'below'}).`,
     whyItMatters: 'PR throughput reflects the volume of change entering the review pipeline. Do not equate PR count with productivity — throughput is a pipeline-load signal, not a value measure.',
     recommendation: 'Inspect whether throughput aligns with planned delivery volume. Compare alongside merge rate, review burden, and change size to assess pipeline health. Do not equate PR count with productivity.',
-    evidenceAndContext: `Analysis of ${totalPRs} PRs over ${weeks} weeks. Throughput: ${formatFrequency(throughput)}. Baseline: ${formatFrequency(baseline)}. ${attribution.provenanceLabel}`,
+    evidenceAndContext: `Analysis of ${windowPrs} PRs created over ${weeks} weeks (${windowLabel}); ${totalPRs} PRs synced in total. Throughput: ${formatFrequency(throughput)}. Baseline: ${formatFrequency(baseline)}. ${attribution.provenanceLabel}`,
     operationalImpact: `PR throughput of ${formatFrequency(throughput)} reflects review pipeline load.`,
     primaryRisk: 'Low PR throughput may indicate stalled contribution; high throughput without merge rate can indicate review backlog.',
     cohort: 'Throughput Signal',
-    confidenceReasoning: `${confidence} confidence based on ${totalPRs} PRs over ${weeks} weeks. ${attribution.provenanceLabel}`,
+    confidenceReasoning: `${confidence} confidence based on ${windowPrs} PRs over ${weeks} created-weeks. ${attribution.provenanceLabel}`,
     recommendationState: 'monitor_only',
     urgencyLabel: 'investigate',
     engineVersion: 'FINAL_ENGINE_V1',
@@ -1629,8 +1659,8 @@ export function generatePrThroughput(input: CanonicalInsightInput): CanonicalIns
     featureFlagState: true,
     evidence: [
       { metric: 'Throughput', value: formatFrequency(throughput), label: 'Current' },
-      { metric: 'Total PRs', value: String(totalPRs), label: 'Sample' },
-      { metric: 'Window', value: `${weeks} weeks`, label: 'Period' },
+      { metric: 'PRs in window', value: String(windowPrs), label: 'Sample' },
+      { metric: 'Window', value: `${weeks} weeks (${windowLabel})`, label: 'Period' },
       { metric: 'Attribution', value: attribution.canAttributeToWorkflow ? attribution.maxLevel : 'Org-wide', label: 'Status' },
     ],
     operationalRead: `PR throughput: ${formatFrequency(throughput)} vs baseline ${formatFrequency(baseline)}.`,
@@ -1659,7 +1689,11 @@ export function generateReviewBurden(input: CanonicalInsightInput): CanonicalIns
 
   const totalPRs = prReviewMetrics.total_prs ?? 0;
   const reviewCount = prReviewMetrics.review_count ?? 0;
-  const reopenedCount = prReviewMetrics.pr_reopened_count ?? 0;
+  // Reopen history requires the Issues events API (not granted for the App):
+  // unfetched reopen history must not be presented as zero reopens.
+  const reopenUnavailable = prReviewMetrics.reopen_history === 'unavailable_no_issues_permission';
+  const reopenedCount = reopenUnavailable ? 0 : (prReviewMetrics.pr_reopened_count ?? 0);
+  const reopenLabel = reopenUnavailable ? 'reopen history unavailable' : `${reopenedCount} reopens`;
 
   if (!hasLiveData || totalPRs <= 0) {
     piDebugLog('[GENERATOR_REVIEW_BURDEN][NO_DATA]', { hasLiveData, totalPRs, reviewCount, reopenedCount });
@@ -1694,9 +1728,9 @@ export function generateReviewBurden(input: CanonicalInsightInput): CanonicalIns
     metricValue: burdenPerPr,
     displayValue: burdenPerPr.toFixed(1),
     displayUnit: 'events/PR',
-    metricDefinition: 'Aggregate review burden = (review_count + pr_reopened_count) / total PRs. This is a burden proxy, NOT true review cycles — true cycles require review state timeline evidence.',
+    metricDefinition: `Aggregate review burden = (submitted reviews${reopenUnavailable ? '' : ' + reopens'}) / total PRs. Burden proxy, NOT true review cycles — true cycles require review state timeline evidence.${reopenUnavailable ? ' Reopen history unavailable under current GitHub permissions.' : ''}`,
     polarity: 'lower_is_better',
-    operationalBreadcrumbs: [`${reviewCount} reviews`, `${reopenedCount} reopens`, `${totalPRs} PRs`, attribution.provenanceLabel],
+    operationalBreadcrumbs: [`${reviewCount} submitted reviews`, reopenLabel, `${totalPRs} PRs`, attribution.provenanceLabel],
     confidence,
     coveragePct: 100,
     n: totalPRs,
@@ -1705,13 +1739,13 @@ export function generateReviewBurden(input: CanonicalInsightInput): CanonicalIns
     sourceLabel: 'GitHub delivery',
     sampleUnit: 'PRs',
     sampleLabel: `${totalPRs} PRs`,
-    description: `Review burden is ${burdenPerPr.toFixed(1)} events per PR (${reviewCount} reviews + ${reopenedCount} reopens across ${totalPRs} PRs), ${deltaPct > 0 ? formatDelta(deltaPct) + ' above' : formatDelta(Math.abs(deltaPct)) + ' below'} the ${baseline} baseline. This is a burden proxy, not true review cycles. ${attribution.provenanceLabel}`,
+    description: `Review burden is ${burdenPerPr.toFixed(1)} events per PR (${reviewCount} submitted reviews${reopenUnavailable ? ', reopen history unavailable' : ` + ${reopenedCount} reopens`} across ${totalPRs} PRs), ${deltaPct > 0 ? formatDelta(deltaPct) + ' above' : formatDelta(Math.abs(deltaPct)) + ' below'} the ${baseline} baseline. This is a burden proxy, not true review cycles. ${attribution.provenanceLabel}`,
     whatChanged: `Review burden: ${burdenPerPr.toFixed(1)} events/PR vs ${baseline} baseline (${formatDelta(deltaPct)} ${deltaPct > 0 ? 'above' : 'below'}).`,
     whyItMatters: 'Higher review burden indicates more review and reopen activity per PR, which extends delivery timelines.',
     recommendation: deltaPct > 30
       ? 'Reduce review burden via smaller PRs, clearer descriptions, and pre-review self-checks. True review cycles require timeline evidence not available here.'
       : 'Monitor review burden alongside merge cycle time. Note: aggregate counts do not prove true review cycles.',
-    evidenceAndContext: `Analysis of ${totalPRs} PRs. Review burden: ${reviewCount} reviews + ${reopenedCount} reopens = ${totalBurden} events (${burdenPerPr.toFixed(1)}/PR). Baseline: ${baseline}. Burden proxy, not true review cycles. ${attribution.provenanceLabel}`,
+    evidenceAndContext: `Analysis of ${totalPRs} PRs. Review burden: ${reviewCount} submitted reviews${reopenUnavailable ? ' (reopen history unavailable)' : ` + ${reopenedCount} reopens`} = ${totalBurden} events (${burdenPerPr.toFixed(1)}/PR). Baseline: ${baseline}. Burden proxy, not true review cycles. ${attribution.provenanceLabel}`,
     operationalImpact: `Review burden of ${burdenPerPr.toFixed(1)} events/PR affects delivery timelines.`,
     primaryRisk: 'High review burden extends delivery timelines. Aggregate counts do not prove true review cycles.',
     cohort: 'Quality Signal',
@@ -1723,7 +1757,7 @@ export function generateReviewBurden(input: CanonicalInsightInput): CanonicalIns
     featureFlagState: true,
     evidence: [
       { metric: 'Review burden / PR', value: burdenPerPr.toFixed(1), label: 'Current' },
-      { metric: 'Reviews + reopens', value: `${reviewCount} + ${reopenedCount}`, label: 'Components' },
+      { metric: 'Components', value: reopenUnavailable ? `${reviewCount} reviews (reopens unavailable)` : `${reviewCount} reviews + ${reopenedCount} reopens`, label: 'Components' },
       { metric: 'Total PRs', value: String(totalPRs), label: 'Sample' },
       { metric: 'Attribution', value: attribution.canAttributeToWorkflow ? attribution.maxLevel : 'Org-wide', label: 'Status' },
     ],

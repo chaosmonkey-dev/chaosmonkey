@@ -103,6 +103,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { API_URL } from '../config/api'
+import { getGithubOauthStatus } from '../lib/githubOauthStatus'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -204,14 +205,12 @@ const fetchUser = async () => {
   authStore.isAuthed = hasRealCredential(authStore.token) || hasRealCredential(localStorage.getItem('api_token'))
 
   try {
-    const response = await fetch(`${API_URL}/github/oauth/status`, {
-      credentials: 'include'
-    })
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`)
+    const status = await getGithubOauthStatus()
+    if (!status.ok) {
+      throw new Error(`HTTP ${status.status}`)
     }
 
-    const data = await response.json()
+    const data = status.data
 
     // Use GitHub user info for display only when available.
     // Do NOT null out user or set isAuthed=false when oauth_authenticated

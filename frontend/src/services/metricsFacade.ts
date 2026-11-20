@@ -1545,13 +1545,16 @@ export type DeliveryTimeSeriesRow = {
   deployment_count: number
   successful_deployment_count: number
   failed_deployment_count: number
+  pending_deployment_count?: number
   deploy_success_rate: number | null
   median_merge_cycle_hours: number | null
-  release_count: number
+  release_count: number | null
   review_count: number
-  pr_reopened_count: number
-  pr_review_cycles: number
+  pr_reopened_count: number | null
+  pr_review_cycles: number | null
   merge_rate: number | null
+  merge_rate_mature?: boolean
+  evidence_partial?: boolean
   count_authority: string
 }
 
@@ -1565,6 +1568,18 @@ export type DeliveryTimeSeriesResult = {
     total_weeks: number
     source: string
     attribution_authority: DeliveryAttributionAuthority
+    evidence_repos?: string[]
+    evidence_window_start?: string | null
+    evidence_window_basis?: string | null
+    merge_rate_basis?: string
+    merge_rate_definition?: string
+    review_count_scope?: string
+    review_count_definition?: string
+    pr_review_cycles_availability?: string
+    pr_reopened_availability?: string
+    release_availability?: string
+    deployment_count_scope?: string
+    deploy_success_rate_denominator?: string
   }
 }
 
@@ -1647,10 +1662,13 @@ export function buildDeliverySeries(
     deployment_count: row.deployment_count,
     deploy_success_rate: row.deploy_success_rate,
     median_merge_cycle_hours: row.median_merge_cycle_hours,
-    release_count: row.release_count ?? 0,
-    review_count: row.review_count ?? 0,
-    pr_review_cycles: row.pr_review_cycles ?? 0,
+    // Unavailable evidence stays null — never coerce to a measured-zero.
+    // The chart layer maps non-finite values to null gaps.
+    release_count: row.release_count ?? null,
+    review_count: row.review_count ?? null,
+    pr_review_cycles: row.pr_review_cycles ?? null,
     merge_rate: row.merge_rate ?? null,
+    evidence_partial: row.evidence_partial ?? false,
   }))
 
   return {

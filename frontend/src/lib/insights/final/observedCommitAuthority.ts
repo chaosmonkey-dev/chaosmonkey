@@ -28,10 +28,27 @@
 import { normalizeToCanonicalToolId } from '../../workflowIdentity';
 
 export interface ObservedCommitTtfcByWorkflow {
+  /**
+   * Commits per session measured over sessions that produced observed
+   * commit evidence. This is a CONDITIONAL denominator — it answers
+   * "when a session had observed commits, how many?" and must be labeled
+   * "per session with observed commits" wherever it is surfaced.
+   */
   commitsPerSession: number | null;
+  /**
+   * Commits per session measured over the workflow's FULL canonical
+   * session population. This is the unconditional "commits per session"
+   * metric — the numerator still contains only observed commit events, so
+   * evidence quality is preserved while cross-workflow comparisons use the
+   * same denominator. null when the workflow has no observed commit
+   * evidence at all (unknown ≠ measured zero).
+   */
+  commitsPerAllSessions: number | null;
   ttfcMinutes: number | null;
   observedCommitSessionCount: number;
   observedTtfcSessionCount: number;
+  /** All canonical sessions for the workflow (unconditional denominator). */
+  allSessionCount: number;
 }
 
 export type ObservedCommitTtfcAuthority = Map<string, ObservedCommitTtfcByWorkflow>;
@@ -61,12 +78,16 @@ export function computeObservedCommitTtfcByWorkflow(
     if (!entry) {
       entry = {
         commitsPerSession: null,
+        commitsPerAllSessions: null,
         ttfcMinutes: null,
         observedCommitSessionCount: 0,
         observedTtfcSessionCount: 0,
+        allSessionCount: 0,
       };
       authority.set(toolId, entry);
     }
+
+    entry.allSessionCount++;
 
     const commitObserved = session.session_commits_source === 'observed';
     const ttfcObserved = session.ttfc_source === 'observed';
@@ -94,6 +115,9 @@ export function computeObservedCommitTtfcByWorkflow(
     const commitSum = (entry as any)._commitSum;
     if (entry.observedCommitSessionCount > 0 && Number.isFinite(commitSum)) {
       entry.commitsPerSession = commitSum / entry.observedCommitSessionCount;
+      if (entry.allSessionCount > 0) {
+        entry.commitsPerAllSessions = commitSum / entry.allSessionCount;
+      }
     }
     const ttfcMsSum = (entry as any)._ttfcMsSum;
     if (entry.observedTtfcSessionCount > 0 && Number.isFinite(ttfcMsSum)) {

@@ -27,6 +27,7 @@
 import {
   resolveAttributionMulti,
   degradeAmbiguous,
+  normalizeRepo,
   type SessionEvidence,
   type PullRequestEvidence,
   type AttributionEvidence,
@@ -54,7 +55,9 @@ export interface DeliveryAttributionSummary {
   prEvidenceCount: number
   /** Human-readable provenance disclosure (never causal). */
   provenanceLabel: string
-  /** Full per-session results (for audit/debug only, never user-visible). */
+  /** Per-session results for evaluated same-repo candidate pairs (audit/debug
+   * only, never user-visible). Cross-repo and missing-repo pairs — which can
+   * only ever produce L4 — are not materialized. */
   results: AttributionEvidence[]
 }
 
@@ -174,22 +177,41 @@ export function resolveDeliveryAttribution(
     }
   }
 
+  // PD P0 PERF: index PRs by normalized repo once. In resolveAttribution,
+  // every non-L4 level requires sameRepo — L1 degrades to L4 on repo
+  // mismatch or missing repo, and the L2/L3 gates all require sameRepo —
+  // so a session/PR pair can only produce L1–L3 when
+  // normalizeRepo(session.repo) === normalizeRepo(pr.repo) and both are
+  // non-empty. Cross-repo and missing-repo pairs are unconditionally L4;
+  // skipping their evaluation is exact-parity, not approximation.
+  // This eliminates the O(sessions × allPrs) cross-product (6,471 × 2,330
+  // ≈ 15M pair evaluations on the main thread — measured >5min, caused
+  // the PD browser freeze) without changing any classification.
+  const prsByRepo = new Map<string, PullRequestEvidence[]>()
+  for (const pr of prs) {
+    const key = normalizeRepo(pr.repo)
+    if (!key) continue
+    const bucket = prsByRepo.get(key)
+    if (bucket) bucket.push(pr)
+    else prsByRepo.set(key, [pr])
+  }
+
   const allResults: AttributionEvidence[] = []
-  for (const session of sessions) {
-    const results = degradeAmbiguous(resolveAttributionMulti(session, prs))
-    allResults.push(...results)
-  }
-
-  // Highest level achieved
   let maxLevel: DeliveryAttributionSummary['maxLevel'] = 'L4'
-  for (const r of allResults) {
-    if (LEVEL_ORDER[r.level] < LEVEL_ORDER[maxLevel]) maxLevel = r.level
+  const attributedSessionIds = new Set<string>()
+  for (const session of sessions) {
+    const key = normalizeRepo(session.repo)
+    const candidates = key ? prsByRepo.get(key) : undefined
+    // No same-repo candidates → every result would be L4; contributes
+    // nothing to maxLevel, attribution counts, or the audit results.
+    if (!candidates || candidates.length === 0) continue
+    const results = degradeAmbiguous(resolveAttributionMulti(session, candidates))
+    for (const r of results) {
+      allResults.push(r)
+      if (LEVEL_ORDER[r.level] < LEVEL_ORDER[maxLevel]) maxLevel = r.level
+      if (r.isAttributed) attributedSessionIds.add(r.sessionId)
+    }
   }
-
-  // Sessions with at least one L1/L2 match
-  const attributedSessionIds = new Set(
-    allResults.filter((r) => r.isAttributed).map((r) => r.sessionId),
-  )
 
   const canAttribute = maxLevel === 'L1' || maxLevel === 'L2'
   const status: DeliveryAttributionStatus = canAttribute

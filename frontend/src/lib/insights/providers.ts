@@ -126,7 +126,7 @@ export function mapGitHubWeeklyToEngOutput(series: any[]): EngOutputPoint[] {
       timeToFirstReviewHours: w?.time_to_first_review ?? w?.codeReviewTime ?? w?.timeToFirstReviewHours,
       deploymentFreqPerWeek: w?.deployment_frequency ?? w?.deploymentFrequency ?? w?.deploymentFreqPerWeek,
       mergeRatePct: w?.merge_rate ?? w?.mergeRate ?? w?.mergeRatePct,
-      changeFailureRatePct: w?.change_failure_rate ?? w?.changeFailureRate ?? w?.changeFailureRatePct,
+      changeFailureRatePct: w?.deploymentFailureRatePct ?? w?.change_failure_rate ?? w?.changeFailureRate ?? w?.changeFailureRatePct,
       // MTTR field mapping (extends EngOutputPoint)
       mttrHours: mttrHours,
       // optional future fields: developer, etc.
@@ -185,7 +185,17 @@ function createDemoMultiPeriodSeries(currentPeriod: string, teamMetrics: any, ag
     })(),
     mergeRatePct: teamMetrics?.merge_rate ?? teamMetrics?.mergeRate ?? aggregated?.merge_rate ?? 0,
     changeFailureRatePct: (() => {
-      const raw = teamMetrics?.change_failure_rate ?? aggregated?.change_failure_rate ?? teamMetrics?.changeFailureRate ?? 0
+      // CFR-only field: deployment failure rate is NOT change failure rate.
+      // null = CFR unavailable; propagate null, never a measured-0% claim.
+      const raw = teamMetrics?.change_failure_rate ?? aggregated?.change_failure_rate ?? teamMetrics?.changeFailureRate
+      if (raw == null) return null
+      return (raw > 0 && raw <= 1) ? raw * 100 : raw
+    })(),
+    deploymentFailureRatePct: (() => {
+      // All-environment deployment failure rate — correctly labeled, never
+      // confused with DORA CFR.
+      const raw = teamMetrics?.deployment_failure_rate ?? aggregated?.deployment_failure_rate ?? teamMetrics?.deploymentFailureRate
+      if (raw == null) return null
       return (raw > 0 && raw <= 1) ? raw * 100 : raw
     })(),
     mttrHours: (() => {
@@ -266,7 +276,7 @@ function createDemoMultiPeriodSeries(currentPeriod: string, teamMetrics: any, ag
       timeToFirstReviewHours: Math.round(baseMetrics.timeToFirstReviewHours * factor.reviewTimeMultiplier * 100) / 100,
       deploymentFreqPerWeek: Math.max(0, Math.round(baseMetrics.deploymentFreqPerWeek * factor.deploymentMultiplier * 10) / 10),
       mergeRatePct: Math.min(100, Math.max(0, Math.round(baseMetrics.mergeRatePct * factor.mergeRateMultiplier * 100) / 100)),
-      changeFailureRatePct: Math.min(100, Math.max(0, Math.round(baseMetrics.changeFailureRatePct * factor.cfrMultiplier * 100) / 100)),
+      changeFailureRatePct: Math.min(100, Math.max(0, Math.round((baseMetrics.changeFailureRatePct ?? 0) * factor.cfrMultiplier * 100) / 100)),
       mttrHours: baseMetrics.mttrHours ? Math.round(baseMetrics.mttrHours * factor.mttrMultiplier * 100) / 100 : undefined,
     } as any
   })
@@ -332,8 +342,14 @@ function createEngOutputPointFromAggregated(period: string, teamMetrics: any, ag
     })(),
     mergeRatePct: teamMetrics?.merge_rate ?? teamMetrics?.mergeRate ?? aggregated?.merge_rate ?? 0,
     changeFailureRatePct: (() => {
-      const raw = teamMetrics?.change_failure_rate ?? aggregated?.change_failure_rate ?? teamMetrics?.changeFailureRate ?? 0
-      // API returns ratio (0-1); convert to percentage if value is ≤ 1 and non-zero
+      // CFR-only: null = unavailable, never a measured-0% claim.
+      const raw = teamMetrics?.change_failure_rate ?? aggregated?.change_failure_rate ?? teamMetrics?.changeFailureRate
+      if (raw == null) return null
+      return (raw > 0 && raw <= 1) ? raw * 100 : raw
+    })(),
+    deploymentFailureRatePct: (() => {
+      const raw = teamMetrics?.deployment_failure_rate ?? aggregated?.deployment_failure_rate ?? teamMetrics?.deploymentFailureRate
+      if (raw == null) return null
       return (raw > 0 && raw <= 1) ? raw * 100 : raw
     })(),
     // MTTR field mapping
@@ -439,7 +455,7 @@ export function mapGitHubToEngOutputByGranularity(series: any[], granularity: Gr
       timeToFirstReviewHours: w?.time_to_first_review ?? w?.codeReviewTime ?? w?.timeToFirstReviewHours,
       deploymentFreqPerWeek: w?.deployment_frequency ?? w?.deploymentFrequency ?? w?.deploymentFreqPerWeek,
       mergeRatePct: w?.merge_rate ?? w?.mergeRate ?? w?.mergeRatePct,
-      changeFailureRatePct: w?.change_failure_rate ?? w?.changeFailureRate ?? w?.changeFailureRatePct,
+      changeFailureRatePct: w?.deploymentFailureRatePct ?? w?.change_failure_rate ?? w?.changeFailureRate ?? w?.changeFailureRatePct,
       // Add MTTR field (extend EngOutputPoint interface if needed, but TypeScript will allow this)
       mttrHours: mttrHours,
     } as any;

@@ -73,7 +73,6 @@ class GitHubAppIngestionService
         $mergedAt = $pr['merged_at'] ?? null;
         $createdAt = $pr['created_at'] ?? null;
         $updatedAt = $pr['updated_at'] ?? null;
-        $reviewCount = isset($pr['requested_reviewers']) && is_array($pr['requested_reviewers']) ? count($pr['requested_reviewers']) : 0;
         $additions = $pr['additions'] ?? 0;
         $deletions = $pr['deletions'] ?? 0;
         $changedFiles = $pr['changed_files'] ?? 0;
@@ -97,10 +96,9 @@ class GitHubAppIngestionService
             $updateData['merged_at'] = null;
         }
 
-        // Set review count if available
-        if ($reviewCount > 0) {
-            $updateData['review_count'] = $reviewCount;
-        }
+        // review_count is NOT written here: requested_reviewers counts pending
+        // reviewer requests, not completed reviews. Real review aggregates are
+        // populated by github:app-sync --enrich-reviews via the reviews API.
 
         // Set additions/deletions/changed_files if the columns exist
         if ($this->hasColumn('pull_requests', 'additions')) {
