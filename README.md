@@ -55,33 +55,48 @@ infrastructure. GitHub integration is optional; telemetry works without it.
 
 *All screenshots below render synthetic demo data — no customer information.*
 
-**AI Operational Intelligence** — per-workflow session analytics across 226
-demo sessions: runtime, AI activity per session, adoption share, and
-instrumented coverage, with the insights engine's qualified output below.
+**AI Operational Intelligence** — the top-level view: per-workflow cards
+across 226 demo sessions showing session runtime, AI activity, adoption
+share, and instrumentation coverage per tracked tool.
 
-![ChaosMonkey dashboard — AI Operational Intelligence](docs/screenshots/dashboard.png)
+![AI Operational Intelligence — workflow cards](docs/screenshots/dashboard.png)
 
-**Productivity by Tool** — six-week time series per workflow with metric,
-period, cohort, developer, repository, and comparison filters. The cost layer
-reads configured per-seat spend and is labeled accordingly — *configured
-estimate, not billing data*.
+**Performance Insights** — the evidence-gated engine in action: a qualified
+finding ("Cursor averages 37.8 more active-coding min/session than VS Code")
+expanded with session counts on both sides of the comparison and its
+evidence basis. Findings the data can't support surface as honest
+"collecting evidence" cards instead (see the gallery).
 
-![Productivity by tool — time series](docs/screenshots/pbt-time-series.png)
+![Performance Insights — qualified finding with evidence basis](docs/screenshots/performance-insights.png)
 
-**Performance Insights** — evidence-gated findings ranked and labeled with
-their basis ("Observational", session counts on both sides of the
-comparison). The engine only surfaces findings backed by observed telemetry.
+**Productivity by Tool — time series** — per-workflow metrics plotted over
+six weeks, with metric, period, cohort, developer, repository, and
+workflow-comparison filters. The cost layer is labeled "Configured
+estimate · Not billing data."
 
-![Performance Insights — qualified findings](docs/screenshots/performance-insights.png)
+![Productivity by Tool — time series](docs/screenshots/pbt-time-series.png)
 
-**Evidence gating** — the same engine at low session volume reports
-"collecting evidence" cards with the sample size, the applicable threshold,
-and the confidence cap — honest early signals, not fabricated maturity.
+**Productivity by Tool — cards** — the second PBT mode: per-workflow
+longitudinal cards with historical averages, peaks, sparklines, and an ops
+ticker across all tracked workflows.
 
-![Performance Insights — evidence gating](docs/screenshots/performance-insights-evidence.png)
+![Productivity by Tool — summary cards](docs/screenshots/productivity-by-tool.png)
 
-Seven more views — summary cards, developer enrollment, Pilot Health, GitHub
-setup, and sign-in — in the [product gallery](docs/product-gallery.md).
+**Pilot Health** — the administrator's operational view: telemetry freshness,
+extension-version distribution across installations, active sources, and
+installation counts — the screen watched during rollout.
+
+![Pilot Health — telemetry freshness and installation status](docs/screenshots/pilot-health.png)
+
+**Team Management** — developer enrollments: each developer gets a personal
+enrollment credential for the supported clients (no dashboard login required
+to send telemetry), with bulk rollout and cohort grouping on the same page.
+
+![Team Management — developer enrollments](docs/screenshots/team-enrollments.png)
+
+More views — the evidence-gated insights state, client setup, enrollment
+roster, GitHub setup, and sign-in — in the
+[product gallery](docs/product-gallery.md).
 
 ## What it does
 
