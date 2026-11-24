@@ -107,7 +107,7 @@ jobs:
           tags: ${{ env.IMAGE }}:${{ steps.version.outputs.version }}-${{ matrix.arch }}
 
       - name: Platform digest
-        run: echo "${{ matrix.platform }} digest: ${{ steps.build.outputs.digest }}"
+        run: 'echo "${{ matrix.platform }} digest: ${{ steps.build.outputs.digest }}"'
 
   # Merges the per-platform manifests into the released tags.
   merge:
