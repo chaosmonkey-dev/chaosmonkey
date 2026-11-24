@@ -2541,8 +2541,12 @@ class TelemetryController extends Controller
                 // range start as its segment start so timestamps before the
                 // first real transition are correctly scoped.
                 $segStartTs = $i === 0 ? $fromUtc->getTimestamp() : $trans['ts'];
+                // Segment bounds must match the timestamp column's storage
+                // format ('Y-m-d H:i:s'). ISO 'T' sorts AFTER a space at the
+                // same date prefix, so same-calendar-day rows would match no
+                // WHEN clause and bucket to a NULL period.
                 $segments[] = [
-                    'start' => gmdate('Y-m-d\TH:i:s', $segStartTs),
+                    'start' => gmdate('Y-m-d H:i:s', $segStartTs),
                     'offset' => $trans['offset'],
                 ];
             }
@@ -2553,7 +2557,7 @@ class TelemetryController extends Controller
         if (empty($segments)) {
             $offset = $tz->getOffset($fromUtc);
             $segments[] = [
-                'start' => $fromUtc->format('Y-m-d\TH:i:s'),
+                'start' => $fromUtc->format('Y-m-d H:i:s'),
                 'offset' => $offset,
             ];
         }

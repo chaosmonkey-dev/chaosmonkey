@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\ApiToken;
+use App\Models\Invite;
 use App\Models\Organization;
 use App\Models\TelemetryEvent;
 use App\Models\User;
@@ -33,11 +34,11 @@ class CanonicalReportingTimezoneTest extends TestCase
     /**
      * Create a session event at a specific UTC timestamp.
      */
-    private function createSessionAtUtc(string $utcTimestamp, string $source = 'vscode'): TelemetryEvent
+    private function createSessionAtUtc(string $utcTimestamp, string $source = 'vscode', ?string $userId = null): TelemetryEvent
     {
         $org = Organization::where('slug', 'chaosmonkey')->first();
         return TelemetryEvent::create([
-            'user_id' => 'test-user',
+            'user_id' => $userId ?? 'test-user',
             'organization_id' => $org?->id,
             'source' => $source,
             'editor_source' => null,
@@ -426,5 +427,67 @@ class CanonicalReportingTimezoneTest extends TestCase
         $data = $response->json('data');
         $periods = array_column($data, 'period');
         $this->assertContains('2026-11-01', $periods, 'Both pre and post exact-transition events must be Nov 1');
+    }
+
+    /**
+     * P0 time-filter regression (observed on PD, 2026-11-24):
+     * a bounded range whose `from` date has sessions returned HTTP 500 and an
+     * empty chart, while All Time worked.
+     *
+     * Root cause: buildDstCorrectPeriodExpression emitted segment boundaries
+     * in ISO 'T' format ('2026-10-26T04:00:00') but telemetry_events.timestamp
+     * stores 'Y-m-d H:i:s'. Lexically '2026-10-26 15:00:00' < '2026-10-26T04:00:00'
+     * (' ' < 'T'), so every session on the from-date matched no WHEN clause and
+     * bucketed to a NULL period -> TypeError -> 500.
+     *
+     * This test uses a bounded window that spans the Nov 1, 2026 DST transition
+     * (the multi-segment CASE path) with events ON the from date.
+     */
+    public function test_bounded_range_with_events_on_from_date_must_not_null_period(): void
+    {
+        // group_by=developer filters sessions to the authoritative identity
+        // map — in non-local envs that is org invites ('invite:{id}').
+        $org = Organization::where('slug', 'chaosmonkey')->first();
+        $invite = Invite::create([
+            'organization_id' => $org->id,
+            'token' => Str::random(32),
+            'email' => 'dev@example.com',
+            'expires_at' => now()->addDays(30),
+        ]);
+        $devId = "invite:{$invite->id}";
+
+        // Events on the from-date itself (2026-10-26 local = EDT, -4h offset)
+        $this->createSessionAtUtc('2026-10-26T15:00:00Z', 'vscode', $devId); // 11:00 EDT, Oct 26 local
+        $this->createSessionAtUtc('2026-10-26T20:30:00Z', 'vscode', $devId); // 16:30 EDT, Oct 26 local
+        // Mid-window event for contrast (post-DST transition, EST)
+        $this->createSessionAtUtc('2026-11-10T18:00:00Z', 'vscode', $devId); // 13:00 EST, Nov 10 local
+
+        // Exact request shape that 500'd in production:
+        $response = $this->withHeaders(['Authorization' => 'Bearer ' . $this->dashboardToken])
+            ->getJson('/api/telemetry/canonical?from=2026-10-26&to=2026-11-24&format=aggregated&period=day&group_by=developer&tools=vscode&reporting_timezone=America/New_York');
+
+        $response->assertStatus(200);
+        $data = $response->json('data');
+        $this->assertNotEmpty($data, 'Bounded range with valid sessions must not return empty data');
+
+        // Every populated bucket must carry a non-null period
+        foreach ($data as $row) {
+            foreach (($row['buckets'] ?? []) as $bucket) {
+                $this->assertNotNull($bucket['period'] ?? null, 'Bucket period must not be NULL');
+            }
+        }
+
+        $meta = $response->json('metadata');
+        $this->assertEquals(3, $meta['canonical_population_count'], 'All 3 in-window sessions must be counted');
+
+        // Non-developer path exercises the same period expression
+        $response2 = $this->withHeaders(['Authorization' => 'Bearer ' . $this->dashboardToken])
+            ->getJson('/api/telemetry/canonical?from=2026-10-26&to=2026-11-24&format=aggregated&period=day&tools=vscode&reporting_timezone=America/New_York');
+
+        $response2->assertStatus(200);
+        $periods = array_column($response2->json('data'), 'period');
+        $this->assertContains('2026-10-26', $periods, 'From-date events must bucket on their local date');
+        $this->assertContains('2026-11-10', $periods, 'Mid-window event must bucket on its local date');
+        $this->assertNotContains(null, $periods, 'No NULL periods may reach the response');
     }
 }
