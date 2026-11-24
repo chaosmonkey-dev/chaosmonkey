@@ -14,6 +14,15 @@ and extend it.
 > **We're open.** `v0.1.3` — Community Preview — is available now under
 > Apache-2.0.
 
+**[Quick start](#quick-start-docker) ·
+[Screenshots](#what-it-looks-like) ·
+[Integrations](#supported-integrations) ·
+[Extending](#extending-chaosmonkey) ·
+[Architecture](#architecture) ·
+[Contributing](CONTRIBUTING.md) ·
+[Security](SECURITY.md) ·
+[Privacy](PRIVACY.md)**
+
 ## Quick start (Docker)
 
 The recommended install is a single all-in-one container — nginx, PHP-FPM,
@@ -44,22 +53,35 @@ infrastructure. GitHub integration is optional; telemetry works without it.
 
 ## What it looks like
 
-*AI Operational Intelligence — per-workflow session analytics across 226
-sessions, rendered from synthetic demo data.*
+*All screenshots below render synthetic demo data — no customer information.*
+
+**AI Operational Intelligence** — per-workflow session analytics across 226
+demo sessions: runtime, AI activity per session, adoption share, and
+instrumented coverage, with the insights engine's qualified output below.
 
 ![ChaosMonkey dashboard — AI Operational Intelligence](docs/screenshots/dashboard.png)
 
-*Productivity by tool — time-series analytics: per-workflow metrics plotted
-across six weeks, with period, cohort, developer, repository, and
-workflow-comparison filters (synthetic demo data).*
+**Productivity by Tool** — six-week time series per workflow with metric,
+period, cohort, developer, repository, and comparison filters. The cost layer
+reads configured per-seat spend and is labeled accordingly — *configured
+estimate, not billing data*.
 
 ![Productivity by tool — time series](docs/screenshots/pbt-time-series.png)
 
-More views — including [Performance Insights](docs/product-gallery.md#performance-insights)
-(qualified findings and the honest evidence-gated state), summary cards,
-developer enrollment, Pilot Health, and GitHub setup — in the
-[product gallery](docs/product-gallery.md). All gallery screenshots use
-synthetic data.
+**Performance Insights** — evidence-gated findings ranked and labeled with
+their basis ("Observational", session counts on both sides of the
+comparison). The engine only surfaces findings backed by observed telemetry.
+
+![Performance Insights — qualified findings](docs/screenshots/performance-insights.png)
+
+**Evidence gating** — the same engine at low session volume reports
+"collecting evidence" cards with the sample size, the applicable threshold,
+and the confidence cap — honest early signals, not fabricated maturity.
+
+![Performance Insights — evidence gating](docs/screenshots/performance-insights-evidence.png)
+
+Seven more views — summary cards, developer enrollment, Pilot Health, GitHub
+setup, and sign-in — in the [product gallery](docs/product-gallery.md).
 
 ## What it does
 
