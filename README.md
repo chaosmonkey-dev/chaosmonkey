@@ -76,6 +76,37 @@ synthetic data.
 - **Organizations** — multi-tenant orgs with invite/connect-code enrollment;
   each install is its own authority.
 
+## Extending ChaosMonkey
+
+ChaosMonkey is designed to be customized, not just deployed. Each surface
+below ships in `v0.1.3` and has a dedicated guide:
+
+- **Performance Insights** — write or tune insight generators and their
+  evidence rules:
+  [docs/extending/performance-insights.md](docs/extending/performance-insights.md)
+- **Productivity by Tool** — add metrics and views across the telemetry and
+  delivery planes:
+  [docs/extending/productivity-by-tool.md](docs/extending/productivity-by-tool.md)
+- **New coding-tool integrations** — the four packaged clients in
+  `extensions/` are worked examples; the ingest contract and client
+  architecture live in [docs/integrations.md](docs/integrations.md) and
+  [docs/reference/](docs/reference/)
+- **Telemetry & identity model** — canonical session/tool taxonomy and the
+  server-authoritative ingest boundary: [docs/architecture.md](docs/architecture.md)
+- **GitHub delivery evidence** — optional OAuth or GitHub App correlation of
+  sessions with PRs, reviews, and deployments:
+  [docs/integrations.md](docs/integrations.md)
+- **Self-hosting** — authentication, persistence, backup, and upgrades:
+  [docs/installation.md](docs/installation.md),
+  [docs/operations.md](docs/operations.md)
+
+The reasoning behind the data, attribution, and evidence contracts is recorded
+in [docs/decisions/](docs/decisions/) — seven architecture decision records
+worth reading before touching analytics code. [docs/README.md](docs/README.md)
+maps every audience to its authoritative doc, and
+[CONTRIBUTING.md](CONTRIBUTING.md) covers local development and running the
+full backend and frontend test suites.
+
 ## Supported integrations
 
 | Tool | Client | Package version | Status |
