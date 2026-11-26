@@ -89,3 +89,24 @@ These invariants protect users of self-hosted installs:
 - Keep PRs focused; describe the *why* in the description.
 - Update docs when behavior, configuration, or supported integrations change.
 - Do not commit secrets, customer data, or credentials of any kind.
+
+## Good first contributions
+
+Concrete, self-contained starting points (no tribal knowledge required):
+
+- **Docs** — screenshots, a `docs/examples/` walkthrough for a second editor
+  fork (the same VSIX serves all VS Code forks), or troubleshooting entries
+  in `docs/onboarding.md` from your own install experience.
+- **Tests** — the ingest `appName` → `editor_source` classification is
+  covered for Windsurf/Devin (`TelemetryTest`); analogous coverage for
+  `uriScheme`/`extensionPath` signals or additional tool names is welcome.
+- **A new client** — `docs/reference/` documents the ingest contract;
+  `extensions/` has four worked examples (VSIX + three Node bridges). A
+  JetBrains or Zed client is the obvious gap (see
+  `docs/integrations.md` → "Explicitly not supported").
+- **Dependency gardening** — the vite/vitest major-bump PRs are open but
+  failing CI; picking one up and making the dev toolchain green is a
+  real contribution.
+- **PI generators** — `docs/extending/performance-insights.md` documents
+  the generator contract; a new evidence-gated insight with tests is
+  in-scope.
