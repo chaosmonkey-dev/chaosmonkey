@@ -54,7 +54,7 @@ server (see [integrations.md](integrations.md) for the full matrix):
 
 | Tool | Install | Endpoint it needs |
 |---|---|---|
-| VS Code / Cursor IDE | `.vsix` from `GET /api/extension/download/latest` → `code --install-extension` | Your `APP_URL` + connect code (prompted) |
+| VS Code / Cursor / Windsurf / Devin Desktop IDE | `.vsix` from `GET /api/extension/download/latest` → `code --install-extension` (or `cursor`/`windsurf`/`devin-desktop --install-extension`) | Your `APP_URL` + connect code (prompted) |
 | Claude Code | `npm i -g` the `…-cc-bridge.tgz` → `chaosmonkey-cc-bridge-install` | `CM_API_BASE_URL` + `CM_CONNECT_CODE` |
 | Cursor Agents Window | `npm i -g` the `…-cursor-bridge.tgz` → `chaosmonkey-cursor-bridge-install` | same env vars |
 | Codex CLI | `npm i -g` the `…-codex-bridge.tgz` → `chaosmonkey-codex-bridge-install` | `--api-base-url` + `--connect-code` |

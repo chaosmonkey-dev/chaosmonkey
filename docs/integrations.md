@@ -12,16 +12,26 @@ they can also be fetched directly:
 | `GET /api/codex-bridge/download/latest` | Codex bridge (tgz) |
 | `GET /api/cursor-agent-bridge/capability` | Cursor-agent capability manifest |
 
-## IDE extension — VS Code and Cursor (`chaosmonkey-telemetry` 0.4.1)
+## IDE extension — VS Code, Cursor, Windsurf, Devin Desktop (`chaosmonkey-telemetry` 0.4.1)
 
 1. Download the `.vsix` from your instance.
 2. `code --install-extension chaosmonkey-telemetry-0.4.1.vsix`
-   (or Cursor's extension UI → Install from VSIX).
+   (or the editor's extension UI → Install from VSIX — `cursor`,
+   `windsurf`, and `devin-desktop` support the same command).
 3. In the app, generate a **connect code** and paste it into the extension
    when prompted — this enrolls the editor against your organization.
 
 Captures editor activity, AI suggestion events, and session boundaries.
-Distinct source: `vscode` / `cursor`.
+The extension detects the host product from `vscode.env.appName`, so one
+VSIX serves every VS Code-fork editor. Distinct sources: `vscode`,
+`cursor`, `windsurf`, `devin`.
+
+**Devin Desktop vs. Devin (the agent product):** the extension covers the
+Devin *Desktop IDE* — a VS Code fork whose sessions attribute as `devin`.
+It does not instrument the separate autonomous Devin cloud-agent product;
+there is no client for that today. Telemetry recorded historically under
+`windsurf` (before the rebrand) remains valid canonical data — both source
+names are first-class tools.
 
 ## Claude Code bridge (0.4.2-cc-bridge)
 
@@ -177,6 +187,7 @@ Each client is validated in CI, but end-to-end coverage differs:
 | Client | Package & download | Hook/install lifecycle | Real client session |
 |---|---|---|---|
 | VS Code/Cursor extension | Verified — sha-checked vsix served by backend | Verified via connect-code exchange + ingest | Not exercised in a GUI session — historically production-observed |
+| VSIX on VS Code forks (Windsurf, Devin Desktop) | Verified — `--install-extension` + `--uninstall-extension` exercised on a real Windsurf binary | Fork detection (`appName` → `editor_source`) covered by backend tests; same connect-code flow as VS Code | Fork GUI session not exercised; source classification verified end-to-end via ingest |
 | Claude Code bridge | Verified | Verified end-to-end against a self-hosted instance (install → hooks → session → ingest → attribution) | Simulated hook lifecycle; `claude` CLI session not yet exercised |
 | Cursor Agents bridge | Verified — sha-pinned artifact + capability endpoint | Verified end-to-end (install → hooks → session lifecycle → ingest) | Simulated hook lifecycle; Agents Window not yet exercised |
 | Codex bridge | Verified | Verified end-to-end (install → hooks.json → session → ingest) | Requires manual hook-trust in Codex `/hooks`; real `codex` session not yet exercised |
@@ -189,8 +200,11 @@ environment — the boundaries above are deliberate, not unknowns.
 
 ## Explicitly not supported
 
-- **Windsurf, Zed, other AI IDEs** — no client ships today; the ingest API is
-  documented in `docs/reference/` if you want to build one.
+- **Zed, JetBrains IDEs, other non-VS Code editors** — they cannot run the
+  VSIX client; the ingest API is documented in `docs/reference/` if you
+  want to build one.
+- **Devin autonomous cloud agent** — see the note above; only the Devin
+  Desktop editor is instrumented.
 - **GitLab / Bitbucket delivery evidence** — GitHub only, for now.
 - **Real billing data** — spend figures are configured estimates, never usage
   billing.

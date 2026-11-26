@@ -71,7 +71,7 @@ workflows.
 ### Client setup
 
 The "Pilot setup" panel lists every supported client with download and
-setup actions — IDE extension (VS Code / Cursor / Devin), Claude Code,
+setup actions — IDE extension (VS Code / Cursor / Windsurf / Devin), Claude Code,
 Codex, and the Cursor Agents companion.
 
 ![Client setup panel](screenshots/setup-developers.png)

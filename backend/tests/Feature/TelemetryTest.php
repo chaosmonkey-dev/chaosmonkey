@@ -90,6 +90,49 @@ class TelemetryTest extends TestCase
         $this->assertDatabaseCount('telemetry_events', 0);
     }
 
+    /**
+     * The shipped VSIX runs on VS Code forks (Windsurf, Devin Desktop) and
+     * reports the host product via metadata.appName. Ingest must classify
+     * each fork as its own editor_source — never collapse them to 'vscode'.
+     * (Docs discrepancy fix: Windsurf/Devin Desktop are supported clients.)
+     */
+    public function test_vscode_fork_appname_classifies_editor_source(): void
+    {
+        $user = User::factory()->create(['organization_id' => $this->org->id]);
+
+        foreach (['Windsurf' => 'windsurf', 'Devin' => 'devin'] as $appName => $expected) {
+            $payload = [
+                'user_id' => 'fork-user-' . $expected,
+                'source' => 'vscode',
+                'events' => [[
+                    'event_type' => 'session',
+                    'duration_ms' => 30000,
+                    'metadata' => [
+                        'session_id' => 'fork-sess-' . $expected,
+                        'appName' => $appName,
+                        'segment_type' => 'session',
+                    ],
+                ]],
+            ];
+
+            $response = $this->actingAs($user)->postJson('/api/telemetry', $payload);
+            $response->assertStatus(200)->assertJson(['status' => 'ok']);
+
+            $event = TelemetryEvent::where('user_id', 'fork-user-' . $expected)->first();
+            $this->assertNotNull($event, "No event stored for appName={$appName}");
+            $this->assertSame($expected, $event->editor_source,
+                "appName '{$appName}' must classify editor_source as '{$expected}'");
+        }
+
+        // Canonical aggregation must surface them as distinct tools
+        $response = $this->withHeaders(['Authorization' => 'Bearer ' . $this->dashboardToken()])
+            ->getJson('/api/telemetry/canonical?format=aggregated&period=week&tools=all');
+        $response->assertStatus(200);
+        $tools = array_column($response->json('data'), 'tool');
+        $this->assertContains('windsurf', $tools);
+        $this->assertContains('devin', $tools);
+    }
+
     public function test_telemetry_endpoint_is_idempotent_for_duplicate_batches(): void
     {
         $user = User::factory()->create(['organization_id' => $this->org->id]);

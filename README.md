@@ -149,6 +149,7 @@ full backend and frontend test suites.
 | Tool | Client | Package version | Status |
 |---|---|---|---|
 | VS Code / Cursor IDE | `extensions/chaosmonkey-telemetry` (VSIX) | 0.4.1 | Packaged artifact verified; authenticated ingest tested |
+| Windsurf / Devin Desktop IDE | same VSIX — VS Code forks | 0.4.1 | Real-binary install verified; source classification tested |
 | Claude Code | `extensions/claude-code-bridge` | 0.4.2-cc-bridge | Verified via packaged install → hook invocation → ingest\* |
 | Cursor Agents Window | `extensions/cursor-agent-bridge` | 0.4.2-cursor-bridge | Verified via packaged install → hook invocation → ingest\* |
 | Codex CLI | `extensions/codex-bridge` | 0.4.1-codex-bridge | Verified via packaged install → hook invocation → ingest\*; requires hook-trust in Codex |
