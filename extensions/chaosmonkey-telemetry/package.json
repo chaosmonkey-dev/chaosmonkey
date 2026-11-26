@@ -83,7 +83,7 @@
   "devDependencies": {
     "@types/node": "^20.x",
     "@types/vscode": "^1.146.0",
-    "@typescript-eslint/eslint-plugin": "^6.x",
+    "@typescript-eslint/eslint-plugin": "^8.x",
     "@typescript-eslint/parser": "^6.x",
     "eslint": "^8.x",
     "typescript": "^5.9.3"
